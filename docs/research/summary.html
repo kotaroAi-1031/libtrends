@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>libtrends 調査サマリ — 言語横断ライブラリ指標サイトの設計</title>
+<meta name="description" content="libtrends の調査フェーズ（API 19 件・既存実装 3 点・健全性指標・設計たたき台）の結論を 1 ページにまとめた資料。">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f9;
+    --bg-elev: #ffffff;
+    --bg-soft: #eeeef3;
+    --text: #16161d;
+    --text-muted: #5b5b6b;
+    --border: #dcdce5;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --good: #0f7b57;
+    --warn: #9a6400;
+    --bad: #b3261e;
+    --shadow: 0 1px 2px rgba(16,16,24,.06), 0 8px 24px -16px rgba(16,16,24,.28);
+    --radius: 14px;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  html[data-theme="dark"] {
+    --bg: #0e0f14;
+    --bg-elev: #16181f;
+    --bg-soft: #1d2029;
+    --text: #e8e9ef;
+    --text-muted: #a0a3b3;
+    --border: #2a2e3a;
+    --accent: #8b8cf7;
+    --accent-soft: #1e2036;
+    --good: #4ade9f;
+    --warn: #f0b429;
+    --bad: #ff7b72;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -20px rgba(0,0,0,.8);
+  }
+  @media (prefers-color-scheme: dark) {
+    html[data-theme="auto"] {
+      --bg: #0e0f14;
+      --bg-elev: #16181f;
+      --bg-soft: #1d2029;
+      --text: #e8e9ef;
+      --text-muted: #a0a3b3;
+      --border: #2a2e3a;
+      --accent: #8b8cf7;
+      --accent-soft: #1e2036;
+      --good: #4ade9f;
+      --warn: #f0b429;
+      --bad: #ff7b72;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -20px rgba(0,0,0,.8);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.85;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px 96px; }
+
+  /* header */
+  header.site {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar { max-width: 1040px; margin: 0 auto; padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
+  .brand { font-weight: 700; letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  nav.top { margin-left: auto; display: flex; gap: 14px; font-size: 13px; }
+  nav.top a { color: var(--text-muted); text-decoration: none; }
+  nav.top a:hover { color: var(--accent); }
+  .toggle {
+    border: 1px solid var(--border); background: var(--bg-elev); color: var(--text);
+    border-radius: 999px; padding: 5px 12px; font-size: 12px; cursor: pointer;
+    font-family: inherit;
+  }
+  .toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* hero */
+  .hero { padding: 56px 0 8px; }
+  .eyebrow { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+  h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.25; margin: 10px 0 14px; letter-spacing: -.02em; }
+  .lede { color: var(--text-muted); font-size: 17px; max-width: 46em; margin: 0; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 28px 0 8px; }
+  .fact { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+  .fact b { display: block; font-size: 26px; line-height: 1.2; letter-spacing: -.02em; }
+  .fact span { color: var(--text-muted); font-size: 12px; }
+
+  /* sections */
+  section { padding-top: 56px; }
+  h2 { font-size: clamp(21px, 3vw, 27px); margin: 0 0 6px; letter-spacing: -.01em; display: flex; align-items: baseline; gap: 10px; }
+  h2 .num { font-family: var(--mono); font-size: 13px; color: var(--accent); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+  h3 { font-size: 17px; margin: 28px 0 8px; }
+  p { margin: 10px 0; }
+  .sub { color: var(--text-muted); margin-top: 0; }
+  a { color: var(--accent); }
+
+  .card {
+    background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px; box-shadow: var(--shadow); margin: 18px 0;
+  }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 18px 0; }
+  .grid4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin: 18px 0; }
+  .mini { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .mini h4 { margin: 0 0 6px; font-size: 14px; letter-spacing: .02em; }
+  .mini p { margin: 0; font-size: 13.5px; color: var(--text-muted); line-height: 1.75; }
+
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); vertical-align: 1px; }
+  .tag.g { background: color-mix(in srgb, var(--good) 12%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, transparent); }
+  .tag.w { background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
+  .tag.b { background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, transparent); }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: var(--bg-elev); min-width: 560px; }
+  th, td { text-align: left; padding: 10px 13px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  thead th { background: var(--bg-soft); font-size: 12px; letter-spacing: .03em; color: var(--text-muted); font-weight: 700; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+  td.mono, th.mono { font-family: var(--mono); font-size: 12.5px; }
+
+  /* code */
+  pre {
+    margin: 14px 0; padding: 16px 18px; overflow-x: auto;
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.65; tab-size: 2;
+  }
+  code { font-family: var(--mono); font-size: .92em; }
+  p code, li code, td code { background: var(--bg-soft); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--border); }
+  .hljs { color: var(--text); background: transparent; }
+  .hljs-comment, .hljs-quote { color: var(--text-muted); font-style: italic; }
+  .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-section, .hljs-link { color: #b45309; }
+  .hljs-string, .hljs-title, .hljs-name, .hljs-type, .hljs-attribute, .hljs-symbol, .hljs-bullet, .hljs-addition { color: var(--good); }
+  .hljs-number, .hljs-meta, .hljs-built_in, .hljs-builtin-name, .hljs-params { color: #7c3aed; }
+  .hljs-attr, .hljs-variable, .hljs-template-variable { color: #0e7490; }
+  .hljs-deletion { color: var(--bad); }
+  html[data-theme="dark"] .hljs-keyword, html[data-theme="dark"] .hljs-selector-tag,
+  html[data-theme="dark"] .hljs-literal, html[data-theme="dark"] .hljs-section { color: #f0b429; }
+  html[data-theme="dark"] .hljs-string, html[data-theme="dark"] .hljs-title,
+  html[data-theme="dark"] .hljs-name, html[data-theme="dark"] .hljs-attr { color: #7ee2b8; }
+  html[data-theme="dark"] .hljs-number, html[data-theme="dark"] .hljs-built_in,
+  html[data-theme="dark"] .hljs-params { color: #c4b5fd; }
+  html[data-theme="dark"] .hljs-variable, html[data-theme="dark"] .hljs-template-variable { color: #67e8f9; }
+  .codehead { display: flex; align-items: center; gap: 8px; margin: 18px 0 -6px; font-size: 12px; color: var(--text-muted); }
+  .codehead b { color: var(--text); font-weight: 600; }
+
+  /* mermaid */
+  .diagram { background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 14px; margin: 18px 0; box-shadow: var(--shadow); overflow-x: auto; }
+  .diagram figcaption { text-align: center; color: var(--text-muted); font-size: 12px; margin-top: 8px; }
+  .mermaid { display: flex; justify-content: center; }
+  .mermaid svg { max-width: 100%; height: auto; }
+
+  figure.svgfig { margin: 18px 0; background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+  figure.svgfig svg { display: block; width: 100%; height: auto; }
+  figure.svgfig figcaption { color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 10px; }
+
+  .note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 16px 0; font-size: 14px; }
+  .note.warn { border-left-color: var(--warn); background: color-mix(in srgb, var(--warn) 9%, transparent); }
+  .note.good { border-left-color: var(--good); background: color-mix(in srgb, var(--good) 9%, transparent); }
+
+  ul, ol { padding-left: 1.3em; }
+  li { margin: 6px 0; }
+  .kv { display: grid; grid-template-columns: 9.5em 1fr; gap: 6px 14px; font-size: 14px; }
+  .kv dt { color: var(--text-muted); }
+  .kv dd { margin: 0; }
+
+  footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12.5px; }
+  .srcline { font-family: var(--mono); font-size: 11.5px; word-break: break-all; }
+  .srcline a { text-decoration: none; }
+  @media (max-width: 640px) {
+    nav.top { display: none; }
+    .kv { grid-template-columns: 1fr; }
+    .kv dt { margin-top: 6px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="bar">
+    <div class="brand"><span class="dot"></span>libtrends 調査サマリ</div>
+    <nav class="top">
+      <a href="#api">API</a>
+      <a href="#impl">既存実装</a>
+      <a href="#health">健全性</a>
+      <a href="#design">設計</a>
+      <a href="#open">未決</a>
+    </nav>
+    <button class="toggle" id="themeBtn" type="button" aria-label="テーマ切り替え">テーマ自動</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="eyebrow">Research Summary · 2026-11-19</div>
+    <h1>言語をまたいで、ライブラリの「使われ方」と「この先」を測る。</h1>
+    <p class="lede">
+      libtrends は npm / PyPI / crates.io / RubyGems / Packagist / Maven / Go / NuGet を横断し、
+      ダウンロード数・スター・依存関係・保守性・脆弱性を集積するサイト。
+      本ページは調査資料 4 点（API 19 件、既存実装 3 点、健全性ツール 2 種、設計たたき台）の結論を要約したもの。
+    </p>
+    <div class="facts">
+      <div class="fact"><b>19</b><span>調査した API・データソース</span></div>
+      <div class="fact"><b>3</b><span>分析した既存実装</span></div>
+      <div class="fact"><b>27%</b><span>単一リクエストで欠落する履歴（実測）</span></div>
+      <div class="fact"><b>8</b><span>横断対象エコシステム</span></div>
+    </div>
+  </div>
+
+  <!-- 1. 結論 -->
+  <section id="conclusion">
+    <h2><span class="num">01</span>結論サマリ</h2>
+    <p class="sub">調査全体から言えることを 4 点に絞る。</p>
+    <div class="grid4">
+      <div class="mini">
+        <h4>① API は三層で組み合わせる</h4>
+        <p>レジストリ公式（一次ソース）、deps.dev / ecosyste.ms（横断集約）、GitHub / Scorecard / OSV（付加指標）。
+           単一 API で全指標は揃わない。</p>
+      </div>
+      <div class="mini">
+        <h4>② 履歴は分割して取り、範囲を明示する</h4>
+        <p>npm の downloads API は 18 か月を超える要求を黙って切り詰める。実測で 27% の欠落。
+           取得はチャンク分割し、返ってきた期間を画面に出す。</p>
+      </div>
+      <div class="mini">
+        <h4>③ 健全性は軸別に扱う</h4>
+        <p>EOL は足切り、脆弱性は CVSS、保守性は連続値。人気度と混ぜると「人気だが EOL」を
+           高評価してしまう。</p>
+      </div>
+      <div class="mini">
+        <h4>④ 欠損は 0 と区別する</h4>
+        <p>取得できない値は <code>null</code>、判定不能は <code>unknown</code>。
+           実測値と推定値は別フィールドで保持する。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. API -->
+  <section id="api">
+    <h2><span class="num">02</span>API 選定 — 三層モデル</h2>
+    <p class="sub">19 件を「一次ソース / 横断集約 / 付加指標」に分けた。ID は <code>01-apis.md</code> の API 一覧に対応する。</p>
+
+    <figure class="diagram">
+      <div class="mermaid" data-src="flowchart TB
+    subgraph L1[&quot;一次ソース（レジストリ公式）&quot;]
+      direction LR
+      N1[&quot;npm downloads&lt;br/&gt;API-001&quot;]
+      N2[&quot;npm registry&lt;br/&gt;API-002&quot;]
+      N3[&quot;PyPI JSON&lt;br/&gt;API-009&quot;]
+      N4[&quot;crates.io&lt;br/&gt;API-012&quot;]
+      N5[&quot;RubyGems&lt;br/&gt;API-013&quot;]
+      N6[&quot;Packagist&lt;br/&gt;API-014&quot;]
+      N7[&quot;Maven Central&lt;br/&gt;API-015&quot;]
+      N8[&quot;Go proxy&lt;br/&gt;API-016&quot;]
+      N9[&quot;NuGet&lt;br/&gt;API-019&quot;]
+    end
+    subgraph L2[&quot;横断集約&quot;]
+      direction LR
+      A1[&quot;deps.dev&lt;br/&gt;API-004&quot;]
+      A2[&quot;ecosyste.ms packages&lt;br/&gt;API-005&quot;]
+      A3[&quot;ecosyste.ms repos&lt;br/&gt;API-006&quot;]
+      A4[&quot;libraries.io&lt;br/&gt;API-003&quot;]
+    end
+    subgraph L3[&quot;付加指標&quot;]
+      direction LR
+      B1[&quot;GitHub REST&lt;br/&gt;API-007&quot;]
+      B2[&quot;GitHub GraphQL&lt;br/&gt;API-008&quot;]
+      B3[&quot;Scorecard&lt;br/&gt;API-017&quot;]
+      B4[&quot;OSV&lt;br/&gt;API-018&quot;]
+    end
+    subgraph EXTRA[&quot;周辺・将来&quot;]
+      direction LR
+      C1[&quot;pypistats&lt;br/&gt;API-010&quot;]
+      C2[&quot;PyPI BigQuery&lt;br/&gt;API-011&quot;]
+    end
+    L1 --&gt; CORE[&quot;PURL で名寄せ&lt;br/&gt;共通指標スキーマ&quot;]
+    L2 --&gt; CORE
+    L3 --&gt; CORE
+    EXTRA -. 補完 .-&gt; CORE
+    CORE --&gt; SCORE[&quot;軸別スコア&lt;br/&gt;（合成は未決）&quot;]">
+      </div>
+      <figcaption>図 1: API の三層構造と名寄せ（Mermaid）</figcaption>
+    </figure>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th class="mono">ID</th><th>API</th><th>主に取る指標</th><th>認証</th><th>レート制限</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">API-001</td><td>npm downloads</td><td>期間別ダウンロード数（一括 128 件・365 日）</td><td>不要</td><td>公式に明示なし</td></tr>
+          <tr><td class="mono">API-002</td><td>npm registry</td><td>バージョン・公開日時・依存・ライセンス</td><td>読み取り不要</td><td>公式に明示なし</td></tr>
+          <tr><td class="mono">API-003</td><td>libraries.io</td><td>依存関係・スター・コントリビュータ</td><td>要（api_key）</td><td>60 req/分</td></tr>
+          <tr><td class="mono">API-004</td><td>deps.dev v3</td><td>依存・被依存・要求制約・アドバイザリ</td><td>不要</td><td>公式に明示なし</td></tr>
+          <tr><td class="mono">API-005</td><td>ecosyste.ms packages</td><td>横断メタデータ・DL 数</td><td>不要（大規模は有償）</td><td>未認証は段階制限</td></tr>
+          <tr><td class="mono">API-006</td><td>ecosyste.ms repos</td><td>スター・最終コミット・Issue</td><td>不要（大規模は有償）</td><td>未認証は段階制限</td></tr>
+          <tr><td class="mono">API-007</td><td>GitHub REST</td><td>スター・Issue・リリース・Advisory</td><td>任意</td><td>60/時（未認証）・5,000/時</td></tr>
+          <tr><td class="mono">API-008</td><td>GitHub GraphQL</td><td>複数リポジトリの一括取得・依存グラフ</td><td>要</td><td>5,000 ポイント/時</td></tr>
+          <tr><td class="mono">API-009</td><td>PyPI JSON</td><td>メタデータ（DL 数なし）</td><td>不要</td><td>公式に明示なし</td></tr>
+          <tr><td class="mono">API-012</td><td>crates.io</td><td>メタデータ・累計/期間 DL</td><td>不要（UA 必須）</td><td>要確認</td></tr>
+          <tr><td class="mono">API-013</td><td>RubyGems</td><td>メタデータ・累計/版別 DL</td><td>不要</td><td>要確認</td></tr>
+          <tr><td class="mono">API-014</td><td>Packagist</td><td>メタデータ・DL・favers・スター</td><td>不要</td><td>要確認</td></tr>
+          <tr><td class="mono">API-015</td><td>Maven Central</td><td>メタデータ（DL 数なし）</td><td>不要</td><td>要確認</td></tr>
+          <tr><td class="mono">API-016</td><td>Go module proxy</td><td>バージョン一覧・info・mod・zip</td><td>不要</td><td>要確認</td></tr>
+          <tr><td class="mono">API-017</td><td>OpenSSF Scorecard</td><td>保守性・CI・レビュー等のスコア</td><td>不要</td><td>要確認</td></tr>
+          <tr><td class="mono">API-018</td><td>OSV.dev</td><td>既知脆弱性（バッチ可）</td><td>不要</td><td>制限なし（公式記載）</td></tr>
+          <tr><td class="mono">API-019</td><td>NuGet V3</td><td>メタデータ・累計 DL</td><td>読み取り不要</td><td>要確認</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-muted)">※ API-010（pypistats・非公式）と API-011（PyPI BigQuery・GCP 認証と課金）は補完・将来枠のため表から省いた。全 19 件の詳細は <code>01-apis.md</code> を参照。</p>
+
+    <h3>推奨スタック</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>役割</th><th>採用候補</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr><td>パッケージ同定・依存</td><td class="mono">API-004</td><td>認証不要で 6 システムを同一スキーマ。依存と被依存の両方</td></tr>
+          <tr><td>ダウンロード数の一次取得</td><td class="mono">API-001 / 012 / 013 / 014</td><td>期間別の推移を出せるのはレジストリ側のみ</td></tr>
+          <tr><td>PyPI のダウンロード</td><td class="mono">API-010 → 将来 API-011</td><td>公式 JSON に DL 数が無いため別経路が必要</td></tr>
+          <tr><td>リポジトリ指標</td><td class="mono">API-008（補助 API-006）</td><td>スター・最終コミット・Issue を一括取得</td></tr>
+          <tr><td>保守性</td><td class="mono">API-017</td><td>項目別の内訳があり、根拠を画面に出せる</td></tr>
+          <tr><td>脆弱性</td><td class="mono">API-018</td><td>レート制限なし・横断・バッチ対応</td></tr>
+          <tr><td>欠損補完・照合</td><td class="mono">API-003 / 005</td><td>キー必須・有償枠の制約があるため常用しない</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note warn">
+      <b>注意:</b> レート制限が公式に明示されているのは API-003（60/分）、API-007（60/時・5,000/時）、
+      API-008（5,000 ポイント/時）、API-018（制限なし）だけ。それ以外は「不明（要確認）」であり、
+      実装前に実測して安全な間隔を決める必要がある。
+    </div>
+  </section>
+
+  <!-- 3. 既存実装 -->
+  <section id="impl">
+    <h2><span class="num">03</span>既存実装から学ぶ — 正確性と欠測の扱い</h2>
+    <p class="sub">npm.bet（Vercel）、TanStack NPM Stats、npm-trend-clone の 3 実装を読んだ結論。</p>
+
+    <figure class="svgfig">
+      <svg viewBox="0 0 840 300" role="img" aria-labelledby="cmpTitle cmpDesc">
+        <title id="cmpTitle">3 実装の機能カバレッジ比較</title>
+        <desc id="cmpDesc">全期間の正確性、欠測処理、レート制限、健全性指標、多言語対応の 5 観点で 3 実装を比較した表。健全性指標と多言語対応は 3 実装とも未対応。</desc>
+        <style>
+          .h { font: 600 12px system-ui, sans-serif; fill: var(--text-muted); }
+          .r { font: 600 13px system-ui, sans-serif; fill: var(--text); }
+          .c { font: 700 15px system-ui, sans-serif; }
+          .lg { font: 11px system-ui, sans-serif; fill: var(--text-muted); }
+          .good { fill: var(--good); }
+          .bad { fill: var(--bad); }
+          .warn { fill: var(--warn); }
+          .muted { fill: var(--text-muted); }
+          .ink { fill: var(--text); }
+          .axis { stroke: var(--border); }
+        </style>
+        <g>
+          <text class="h" x="250" y="32">npm.bet</text>
+          <text class="h" x="440" y="32">TanStack NPM Stats</text>
+          <text class="h" x="660" y="32">npm-trend-clone</text>
+        </g>
+        <g class="r">
+          <text x="20" y="76">全期間の正確性</text>
+          <text x="20" y="120">欠測・補間の扱い</text>
+          <text x="20" y="164">レート制限</text>
+          <text x="20" y="208">健全性・脆弱性</text>
+          <text x="20" y="252">多言語・多レジストリ</text>
+        </g>
+        <g class="c" text-anchor="middle">
+          <text x="290" y="81" class="bad">×</text>
+          <text x="480" y="81" class="good">◎</text>
+          <text x="700" y="81" class="bad">×</text>
+
+          <text x="290" y="125" class="good">◎</text>
+          <text x="480" y="125" class="muted">—</text>
+          <text x="700" y="125" class="muted">—</text>
+
+          <text x="290" y="169" class="muted">—</text>
+          <text x="480" y="169" class="warn">△</text>
+          <text x="700" y="169" class="good">◎</text>
+
+          <text x="290" y="213" class="bad">×</text>
+          <text x="480" y="213" class="bad">×</text>
+          <text x="700" y="213" class="bad">×</text>
+
+          <text x="290" y="257" class="bad">×</text>
+          <text x="480" y="257" class="bad">×</text>
+          <text x="700" y="257" class="bad">×</text>
+        </g>
+        <g class="axis" stroke-width="1">
+          <line x1="230" y1="46" x2="230" y2="272"/>
+          <line x1="380" y1="46" x2="380" y2="272"/>
+          <line x1="580" y1="46" x2="580" y2="272"/>
+          <line class="axis" x1="10" y1="272" x2="820" y2="272"/>
+        </g>
+        <text class="lg" x="20" y="292">◎ 十分 ／ △ 部分的 ／ — なし ／ × 未対応</text>
+      </svg>
+      <figcaption>図 2: 3 実装のカバレッジ比較（インライン SVG）— 健全性指標と多言語対応は全実装が未対応で、ここが libtrends の空白地帯</figcaption>
+    </figure>
+
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-top:0">npm.bet</h3>
+        <dl class="kv">
+          <dt>取得</dt><dd>server action から <code>api.npmjs.org/downloads/range</code> を直接</dd>
+          <dt>キャッシュ</dt><dd>Upstash Redis・TTL 1 時間・<code>after()</code> で非同期保存</dd>
+          <dt>工夫</dt><dd>ゼロ補間をオプトイン。実測値と推定値を別フィールドで保持し、共有 URL・SVG 埋め込み・OG に設定を引き回す</dd>
+          <dt>弱点</dt><dd>全期間を単一リクエストで取るため 18 か月で切れる</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">TanStack NPM Stats</h3>
+        <dl class="kv">
+          <dt>取得</dt><dd>サーバ関数に集約し、複数パッケージを一括取得</dd>
+          <dt>キャッシュ</dt><dd>DB 24 時間 + 6 時間ごとの定期更新</dd>
+          <dt>工夫</dt><dd>500 日チャンクで全期間を再構成。ライブラリ単位（旧名・アドオン）に集約</dd>
+          <dt>弱点</dt><dd>正確性の維持コストが高い（数千リクエスト）。集約は二重計上の可能性を本人が明示</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">npm-trend-clone</h3>
+        <dl class="kv">
+          <dt>取得</dt><dd>自前 API route が <code>downloads/range</code> を並列取得（最大 10 件）</dd>
+          <dt>キャッシュ</dt><dd>Next.js の fetch キャッシュ 1 時間</dd>
+          <dt>工夫</dt><dd>IP 単位 100 req/10 秒のスライディングウィンドウ。認証・プリセット・E2E/MSW まで完備</dd>
+          <dt>弱点</dt><dd>2y / 5y レンジが 18 か月上限を考慮しておらず、表示期間と実データがずれる</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">3 実装に共通する弱点</h3>
+        <ul style="margin:0;padding-left:1.2em;font-size:14px">
+          <li>すべて npm 専用。PURL による名寄せもエコシステム差異の吸収もない</li>
+          <li>健全性・脆弱性を指標に含めていない</li>
+          <li>ダウンロード数の意味（CI・ミラーを含む）の説明が弱い</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>「18 か月の壁」— 実測された欠落</h3>
+    <p>
+      npm downloads API は 18 か月を超える期間を要求すると、エラーにせず<strong>黙って切り詰める</strong>。
+      TanStack の検証では、18 か月・24 か月・全期間のどれを要求しても 549 日分の同じ値が返った。
+      <code>@tanstack/react-query</code> を単一リクエストで取った場合と、500 日ずつ分割して合算した場合の差は次のとおり。
+    </p>
+
+    <figure class="svgfig">
+      <svg viewBox="0 0 820 250" role="img" aria-labelledby="gapTitle gapDesc">
+        <title id="gapTitle">単一リクエストとチャンク分割のダウンロード数比較</title>
+        <desc id="gapDesc">単一リクエストは 585,291,892 ダウンロード（549 日）。500 日ずつ 5 分割して合算すると 744,337,492 ダウンロード（2,235 日）。差分は 1 億 5,900 万、全体の 27 パーセント。</desc>
+        <style>
+          .ink { fill: var(--text); }
+          .muted { fill: var(--text-muted); }
+          .good { fill: var(--good); }
+          .bad { fill: var(--bad); }
+          .warn { fill: var(--warn); }
+          .axis { stroke: var(--border); }
+        </style>
+        <g font-family="system-ui, sans-serif">
+          <text x="20" y="28" font-size="13" class="ink" font-weight="600">@tanstack/react-query の全期間ダウンロード（2019-10-25 以降）</text>
+
+          <text x="20" y="76" font-size="12" class="muted">単一リクエスト</text>
+          <rect x="150" y="60" width="390" height="26" rx="5" class="bad" opacity=".75"/>
+          <text x="548" y="79" font-size="12" class="ink">585,291,892（549 日）</text>
+
+          <text x="20" y="130" font-size="12" class="muted">チャンク分割</text>
+          <rect x="150" y="114" width="497" height="26" rx="5" class="good" opacity=".8"/>
+          <text x="655" y="133" font-size="12" class="ink">744,337,492（2,235 日）</text>
+
+          <rect x="150" y="164" width="107" height="26" rx="5" class="warn" opacity=".65"/>
+          <text x="266" y="183" font-size="12" class="warn" font-weight="600">欠落 159,045,600（27%）</text>
+
+          <line class="axis" x1="150" y1="42" x2="150" y2="205"/>
+          <text x="150" y="226" font-size="11" class="muted">0</text>
+          <text x="647" y="226" font-size="11" class="muted">7.4 億</text>
+        </g>
+      </svg>
+      <figcaption>図 3: 単一リクエストでは履歴の 27% が欠落する（TanStack の検証記事より）</figcaption>
+    </figure>
+
+    <div class="codehead"><b>TypeScript</b><span>— 500 日ずつ分割して合算する（設計ブログのコードを要約）</span></div>
+<pre><code class="language-typescript">const maxChunkDays = 500; // 18 か月上限を安全に下回る
+while (currentDate &lt; today) {
+  const chunkEnd = addDays(currentDate, maxChunkDays);
+  const url = `https://api.npmjs.org/downloads/range/${format(currentDate)}:${format(chunkEnd)}/${pkg}`;
+  const data = await fetchWithRetry(url);   // リトライ必須
+  chunks.push(data);
+  currentDate = chunkEnd;
+  await sleep(200);                          // レート制限回避
+}
+const total = chunks.flatMap(c =&gt; c.downloads).reduce((s, d) =&gt; s + d.downloads, 0);</code></pre>
+
+    <div class="note good">
+      <b>設計への反映:</b> 取得した期間が要求と一致したかを必ず検査し、不一致は
+      <code>meta.missing</code> に記録して UI に出す。どの API でも「要求した期間」と「返ってきた期間」を
+      突き合わせる、というルールを共通化する。
+    </div>
+  </section>
+
+  <!-- 4. 健全性 -->
+  <section id="health">
+    <h2><span class="num">04</span>健全性指標 — EOL は足切り、脆弱性は深刻度</h2>
+    <p class="sub">uzomuzo（v0.10.0・実行確認済み）と vuls（公式仕様ベース・この環境には未導入）。</p>
+
+    <div class="codehead"><b>Console</b><span>— uzomuzo の実出力（express と request）</span></div>
+<pre><code class="language-plaintext">STATUS     PURL                    LIFECYCLE     BUILD
+✅ ok       pkg:npm/express@4.18.2  Active        Hardened 9.5
+│ Stable: 5.3.0 (2026-10-09)   Used by: 2182 packages
+│ Scorecard Overall: 8.5/10    Maintained: 10.0/10
+
+pkg:npm/request@2.88.2   verdict=replace   lifecycle=EOL-Confirmed
+                         reason="Deprecated in npm registry"
+pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled
+                         reason="Maintained but no commit data"</code></pre>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>共通指標</th><th>供給元</th><th>欠損時の扱い</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">health.lifecycle</td><td>uzomuzo <code>lifecycle</code></td><td><code>unknown</code></td></tr>
+          <tr><td class="mono">health.eol</td><td>uzomuzo（EOL-Confirmed）</td><td><code>false</code> ではなく <code>unknown</code></td></tr>
+          <tr><td class="mono">health.maintained_score</td><td>uzomuzo / Scorecard（API-017）</td><td><code>null</code></td></tr>
+          <tr><td class="mono">health.build_integrity</td><td>uzomuzo <code>build_integrity_score</code></td><td><code>null</code></td></tr>
+          <tr><td class="mono">health.dependents</td><td>deps.dev（API-004）</td><td><code>null</code></td></tr>
+          <tr><td class="mono">vuln.open_count / max_cvss</td><td>OSV（API-018）、vuls</td><td><code>null</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid2">
+      <div class="card" style="margin:0">
+        <h3 style="margin-top:0">合成ルール（案・推測を含む）</h3>
+        <ul style="margin:0;padding-left:1.2em;font-size:14px">
+          <li><b>EOL は足切り</b>。他指標で覆さない（例: request は今も広く使われるが EOL）</li>
+          <li><b>脆弱性は CVSS を主、件数を従</b>。確度の低い検出は除外</li>
+          <li><b>保守性は連続値</b>。0〜100 に正規化し、平均ではなく低い方を強調</li>
+          <li><b>人気度は健全性と分離</b>。混ぜると「人気だが EOL」を高評価にする</li>
+        </ul>
+      </div>
+      <div class="card" style="margin:0">
+        <h3 style="margin-top:0">vuls の位置づけ</h3>
+        <p style="font-size:14px;margin-top:0">
+          vuls は OS・サーバ寄りの脆弱性スキャナで、<code>vuls report -format-json</code> と
+          CycloneDX 出力を持つ。ライブラリ横断の脆弱性ソースには向かないため、
+          <b>スコアの主ソースにはしない</b>。
+        </p>
+        <p style="font-size:14px;margin-bottom:0">
+          用途は「利用環境の観測」と「検証済み知見の還元」に限定。レジストリ横断の脆弱性は
+          OSV（API-018）を主とする。<b>この環境に vuls は未導入で、実出力の検証は未実施。</b>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 設計 -->
+  <section id="design">
+    <h2><span class="num">05</span>設計たたき台</h2>
+    <p class="sub">主キーは PURL。収集は一方向のパイプラインにし、生レスポンスを残す。</p>
+
+    <figure class="diagram">
+      <div class="mermaid" data-src="flowchart LR
+    subgraph SRC[&quot;データソース&quot;]
+      direction TB
+      S1[&quot;レジストリ公式 API&quot;]
+      S2[&quot;横断集約 API&quot;]
+      S3[&quot;GitHub / Scorecard / OSV&quot;]
+      S4[&quot;uzomuzo / vuls&quot;]
+    end
+    subgraph ING[&quot;収集層&quot;]
+      direction TB
+      A[&quot;アダプタ&lt;br/&gt;ソース別&quot;]
+      Q[&quot;レート制限つきキュー&quot;]
+      RAW[(&quot;生レスポンス保存&quot;)]
+    end
+    subgraph CORE[&quot;正規化・評価層&quot;]
+      direction TB
+      N[&quot;PURL へ名寄せ&quot;]
+      H[&quot;健全性評価&quot;]
+      SC[&quot;軸別スコア&quot;]
+    end
+    subgraph SRV[&quot;配信層&quot;]
+      direction TB
+      DB[(&quot;スナップショット DB&lt;br/&gt;日次パーティション&quot;)]
+      API[&quot;公開 API / BFF&quot;]
+      WEB[&quot;Web UI&quot;]
+    end
+    S1 --&gt; A
+    S2 --&gt; A
+    S3 --&gt; A
+    S4 --&gt; A
+    A --&gt; Q --&gt; RAW --&gt; N --&gt; H --&gt; SC --&gt; DB --&gt; API --&gt; WEB">
+      </div>
+      <figcaption>図 4: 収集アーキテクチャ（Mermaid）— 生レスポンスを残し、正規化の変更時に再取得しない</figcaption>
+    </figure>
+
+    <div class="grid2">
+      <div class="card" style="margin:0">
+        <h3 style="margin-top:0">指標スキーマ（6 名前空間）</h3>
+        <dl class="kv">
+          <dt>identity</dt><dd>purl / ecosystem / name / latest_version</dd>
+          <dt>popularity</dt><dd>downloads / stars / dependents</dd>
+          <dt>dependency</dt><dd>direct / transitive</dd>
+          <dt>maintenance</dt><dd>lifecycle / eol / scores / reason</dd>
+          <dt>security</dt><dd>open_vulns / max_cvss / fixed_available</dd>
+          <dt>meta</dt><dd>observed_at / confidence / missing</dd>
+        </dl>
+      </div>
+      <div class="card" style="margin:0">
+        <h3 style="margin-top:0">画面構成</h3>
+        <ul style="margin:0;padding-left:1.2em;font-size:14px">
+          <li>トップ: 言語・期間・指標の切替、急上昇／急落</li>
+          <li>パッケージ詳細: 推移グラフ、健全性カード、依存サマリ、出典と取得日時</li>
+          <li>比較: 最大 5 件。欠損は「データなし」と明示（0 で描かない）</li>
+          <li>依存グラフ: 深さ 1〜3、EOL ノードを色分け</li>
+          <li>健全性レポート: 判定理由・Scorecard 内訳・脆弱性一覧</li>
+          <li>指標の説明: 定義・取得元・既知の限界</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="codehead"><b>JSON</b><span>— 共通指標スキーマの抜粋（値が無い場合は null、判定不能は unknown）</span></div>
+<pre><code class="language-json">{
+  "identity": { "purl": "pkg:npm/express", "ecosystem": "npm", "latest_version": "5.3.0" },
+  "popularity": { "downloads": { "last_week": 273970923, "unit": "tarball_fetches" },
+                  "stars": 69687, "dependents": 2182 },
+  "dependency": { "direct": 31, "transitive": 39, "depth_max": null },
+  "maintenance": { "lifecycle": "active", "eol": false,
+                   "maintained_score": 10.0, "build_integrity_score": 9.5,
+                   "reason": "Actively maintained with recent releases" },
+  "security": { "open_vulns": 0, "max_cvss": null, "sources": ["API-018"] },
+  "meta": { "observed_at": "2026-11-19T00:00:00Z", "confidence": "high",
+            "missing": ["dependency.depth_max"] }
+}</code></pre>
+
+    <h3>バッチの層別</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>ジョブ</th><th>頻度</th><th>失敗時の扱い</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">fetch:downloads</td><td>日次</td><td>欠測日を記録し、前日値で補間しない</td></tr>
+          <tr><td class="mono">fetch:deps</td><td>週次</td><td>前回値を「古い」フラグ付きで保持</td></tr>
+          <tr><td class="mono">fetch:github</td><td>日次</td><td>レート制限に当たったら翌日へ繰越</td></tr>
+          <tr><td class="mono">scan:health</td><td>週次</td><td><code>unknown</code> を保存（ok にしない）</td></tr>
+          <tr><td class="mono">fetch:osv</td><td>日次</td><td>前回の一覧を保持し、鮮度を表示</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 6. 未決 -->
+  <section id="open">
+    <h2><span class="num">06</span>未決事項</h2>
+    <p class="sub">調査では決めきれず、実装前に判断が必要なもの。</p>
+    <div class="card">
+      <ol style="margin:0;padding-left:1.3em">
+        <li><b>スコア合成の是非と重み</b> — 軸別表示のままにするか、単一スコアを出すか。検証方法も未定。</li>
+        <li><b>対象カタログの作り方</b> — 「人気上位 N 件」の N と選定基準。レジストリ間の偏り。</li>
+        <li><b>PyPI のダウンロード指標</b> — 非公式 API-010 で始めるか、API-011（BigQuery）に投資するか。</li>
+        <li><b>DL 数を持たないエコシステム</b> — Maven（API-015）と Go（API-016）を被依存数だけで比較してよいか。</li>
+        <li><b>レート制限が不明な API の運用間隔</b> — 実測で決める必要がある。</li>
+        <li><b>vuls の組み込み範囲</b> — 初期リリースに含めるか。実機検証も未実施。</li>
+        <li><b>データ鮮度の表示仕様</b> — 取得失敗時に古い値をどう見せるか。</li>
+        <li><b>利用条件の確認</b> — ecosyste.ms の商用条件、libraries.io のキー、crates.io のレート制限。</li>
+      </ol>
+    </div>
+  </section>
+
+  <footer>
+    <p style="margin-top:0">
+      本ページは <code>docs/research/</code> の 4 資料（<code>01-apis.md</code>、<code>02-existing-implementations.md</code>、
+      <code>03-health-signals.md</code>、<code>04-design-draft.md</code>）の結論に基づく要約。数値・仕様は資料および
+      一次情報で確認した範囲のみを記載し、推測は「案」「推測」と明記した。調査日 2026-11-19。
+    </p>
+    <p style="margin-bottom:4px"><b>主な出典</b></p>
+    <div class="srcline">
+      <a href="https://github.com/npm/registry/blob/master/docs/download-counts.md">npm downloads API</a> ·
+      <a href="https://docs.deps.dev/api/v3/">deps.dev API v3</a> ·
+      <a href="https://docs.ecosyste.ms/">ecosyste.ms</a> ·
+      <a href="https://libraries.io/api">libraries.io</a> ·
+      <a href="https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits-for-the-graphql-api">GitHub GraphQL rate limits</a> ·
+      <a href="https://docs.pypi.org/api/json/">PyPI JSON API</a> ·
+      <a href="https://crates.io/data-access">crates.io data access</a> ·
+      <a href="https://guides.rubygems.org/rubygems-org-api/">RubyGems API</a> ·
+      <a href="https://packagist.org/apidoc">Packagist</a> ·
+      <a href="https://central.sonatype.org/search/rest-api-guide/">Maven Central</a> ·
+      <a href="https://go.dev/ref/mod#goproxy-protocol">Go module proxy</a> ·
+      <a href="https://securityscorecards.dev/">OpenSSF Scorecard</a> ·
+      <a href="https://google.github.io/osv.dev/api/">OSV.dev</a> ·
+      <a href="https://learn.microsoft.com/nuget/api/overview">NuGet</a> ·
+      <a href="https://tanstack.com/blog/npm-stats-the-right-way">TanStack: npm-stats-the-right-way</a> ·
+      <a href="https://github.com/future-architect/uzomuzo-oss">uzomuzo</a> ·
+      <a href="https://vuls.io/">vuls</a>
+    </div>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('themeBtn');
+  var modes = ['auto', 'light', 'dark'];
+  var labels = { auto: 'テーマ自動', light: 'ライト', dark: 'ダーク' };
+
+  function stored() {
+    try { return localStorage.getItem('libtrends-theme') || 'auto'; } catch (e) { return 'auto'; }
+  }
+  function apply(mode) {
+    root.setAttribute('data-theme', mode);
+    btn.textContent = labels[mode];
+    try { localStorage.setItem('libtrends-theme', mode); } catch (e) {}
+    renderDiagrams();
+  }
+  function effectiveTheme() {
+    var mode = root.getAttribute('data-theme');
+    if (mode === 'light' || mode === 'dark') return mode;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  btn.addEventListener('click', function () {
+    var mode = root.getAttribute('data-theme');
+    apply(modes[(modes.indexOf(mode) + 1) % modes.length]);
+  });
+
+  var seq = 0;
+  function renderDiagrams() {
+    if (!window.mermaid) return;
+    var nodes = document.querySelectorAll('.mermaid');
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: effectiveTheme() === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose',
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif'
+    });
+    nodes.forEach(function (node) {
+      if (!node.dataset.src) node.dataset.src = node.textContent;
+      node.removeAttribute('data-processed');
+      node.innerHTML = node.dataset.src;
+      seq += 1;
+      window.mermaid.run({ nodes: [node], suppressErrors: true });
+    });
+  }
+
+  apply(stored());
+  if (window.hljs) {
+    window.hljs.highlightAll();
+  } else {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js';
+    s.onload = function () { window.hljs.highlightAll(); };
+    document.head.appendChild(s);
+  }
+  if (window.matchMedia) {
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+      if (root.getAttribute('data-theme') === 'auto') renderDiagrams();
+    });
+  }
+})();
+</script>
+</body>
+</html>
