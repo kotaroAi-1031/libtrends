@@ -1,5 +1,7 @@
 # libtrends 設計たたき台
 
+> 索引: [README.md](README.md) ／ 前提となる API 調査: [01-apis.md](01-apis.md)
+
 ## 概要
 
 ### 目的
