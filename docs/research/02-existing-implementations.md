@@ -88,7 +88,7 @@ after(() => { redis.setex(cacheKey, CACHE_TTL_SECONDS, data); });
 
 - **「ゼロは障害の証明ではない」という立場を UI とデータ構造の両方に埋め込んでいる**。
   実測値 `reportedDownloads` と補間値 `downloads` を別フィールドで保持するため、
-  後から表示を切り替えても元データが壊れない。
+  後から表示を切り替えても元データは変わらない。
 - 変換ロジックを `lib/` の純粋関数に切り出し、`tests/fixtures/download-gaps.json` に
   実レスポンスを凍結して回帰テストしている（`pnpm test`）。
 - 埋め込み・共有・OG で同じ設定を再現するため、状態を URL に集約している。
