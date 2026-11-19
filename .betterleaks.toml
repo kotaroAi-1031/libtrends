@@ -104,3 +104,16 @@ confidence = "medium"
 filter = '''
 entropy(finding["secret"]) <= 4.5
 '''
+
+# --- Allowlist: vendored reference packs (libtrends) ---
+# docs/research/references/ holds Repomix packs of third-party OSS
+# repositories, saved verbatim as research references (read-only).
+# Their sample values (local-dev docker-compose passwords, E2E test
+# fixtures, localhost DATABASE_URLs) trip the generic rules; all 30
+# findings were inspected on 2026-11-19 and are sample values, not
+# real credentials. Authored code and documents stay fully scanned.
+[allowlist]
+description = "Vendored Repomix reference packs (third-party snapshots)"
+paths = [
+  '''docs/research/references/.*''',
+]
