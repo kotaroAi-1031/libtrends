@@ -17,6 +17,10 @@
 環境にどんな脆弱性が残っているか」を答える。libtrends では前者をライブラリ単位の指標に、
 後者を利用環境側の観測値として扱う（理由は「指標モデルへの対応付け」で述べる）。
 
+対象言語は Go / TypeScript / JavaScript / MoonBit / Rust / Python の 6 言語。
+uzomuzo は deps.dev を参照するため、deps.dev が扱わない **MoonBit は判定できない**。
+この欠落は「uzomuzo」節の末尾で実測結果とあわせて扱う。
+
 ## uzomuzo
 
 ### 何をするツールか
@@ -113,6 +117,34 @@ pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled         reason="Mai
 CI ゲート用途としては `--fail-on eol-confirmed` が用意されている。libtrends では自前の
 スコアリングに使うが、同じ判定基準を「依存関係の監査」機能に流用できる。
 
+### MoonBit は判定できない（実測）
+
+uzomuzo は deps.dev のパッケージ情報を前提にするため、deps.dev が非対応の MoonBit では
+判定が成立しない。実測（2026-11-20）は次のとおり。
+
+```text
+$ uzomuzo scan pkg:moonbit/moonbitlang/x@0.5.7 --format json
+verdict    = review
+lifecycle  = Review Needed
+build_integrity = Ungraded (0)
+error      = "package not found in deps.dev"
+```
+
+`review` は「判断できなかった」を意味し、健全であることを意味しない。Scorecard も
+MoonBit の主要リポジトリを公開データセットに持たない（`github.com/moonbitlang/x` などは 404）。
+したがって MoonBit では、次の一次情報から自前で保守性を組み立てる必要がある。
+
+| 代替シグナル | 取得元 | 意味 |
+| --- | --- | --- |
+| 最終リリース日 | API-020 `versions` / `metadata.created_at` | 更新の止まり具合 |
+| yanked の有無 | API-020 `yanked` / `versions[].yanked` | 撤回された版か |
+| ビルド状態 | API-020 `build_status` | 公開時のビルド成否 |
+| 被依存数 | API-020 `dependents` | 利用規模と保守の動機 |
+| スター・最終コミット | API-007／API-008（リポジトリ URL 経由） | 開発の継続性 |
+
+この代替判定は libtrends 側のロジックであり、uzomuzo の判定と同列には置かない。
+画面では「uzomuzo 判定なし（MoonBit）」と明示し、代替指標を別枠で見せる。
+
 ## vuls
 
 ### 何をするツールか
@@ -171,10 +203,14 @@ CycloneDX 出力があるため、SBOM を介した突合も可能。libtrends �
 | `health.maintained_score` | 保守状況のスコア（0〜10） | uzomuzo / Scorecard（API-017） | `null` |
 | `health.build_integrity` | サプライチェーン健全性（0〜10） | uzomuzo `build_integrity_score` | `null` |
 | `health.stars` | スター数 | GitHub（API-007 / API-008） | `null` |
-| `health.dependents` | 被依存数 | deps.dev（API-004）、uzomuzo `dependent_count` | `null` |
+| `health.dependents` | 被依存数 | deps.dev（API-004）、uzomuzo `dependent_count`、MoonBit は API-020 | `null` |
 | `vuln.open_count` | 未修正の既知脆弱性数 | OSV（API-018）、vuls | `null` |
 | `vuln.max_cvss` | 最大 CVSS | OSV、vuls | `null` |
 | `vuln.fixed_available` | 修正版の有無 | OSV、vuls | `unknown` |
+
+MoonBit だけは `health.maintained_score` と `health.build_integrity` が埋まらない
+（uzomuzo が判定不能、Scorecard も未収録）。この 2 項目は `null` のままにし、
+代替シグナル（最終リリース日・yanked・ビルド状態）を別フィールドで持たせる。
 
 ### 合成の考え方（案・推測を含む）
 
@@ -193,6 +229,8 @@ CycloneDX 出力があるため、SBOM を介した突合も可能。libtrends �
 
 - uzomuzo の判定は外部サービス（deps.dev、Scorecard、レジストリ）に依存する。取得失敗時は
   `unknown` を返し、前回値を「古い値」として保持する（判定不能を ok にしない）。
+- MoonBit は uzomuzo の判定対象外（`error: package not found in deps.dev`）。`review` を
+  「問題なし」と読み替えないよう、UI 側で明示する。
 - vuls は OS パッケージの脆弱性が中心で、言語エコシステムのライブラリ網羅性は OSV に劣る。
   スコアの主ソースにしない理由がここにある。
 - どちらのツールも「根拠（reason / CVE ID）」を保持できる。スコアだけを保存すると説明できない
@@ -201,10 +239,11 @@ CycloneDX 出力があるため、SBOM を介した突合も可能。libtrends �
 ## 出典
 
 - uzomuzo 公式リポジトリ（README・ライセンス、Apache-2.0）: https://github.com/future-architect/uzomuzo-oss
-- uzomuzo 実機出力: 本 VM の `~/workspace/tools/uzomuzo/uzomuzo` v0.10.0 を実行（2026-11-19）
+- uzomuzo 実機出力: 本 VM の `~/workspace/tools/uzomuzo/uzomuzo` v0.10.0 を実行（2026-11-19、MoonBit の確認は 2026-11-20）
 - vuls 公式サイト: https://vuls.io/
 - vuls レポート（`-format-json` / `-format-cyclonedx-json`）: https://vuls.io/docs/en/usage-report.html
 - vuls リポジトリ: https://github.com/future-architect/vuls
 - OpenSSF Scorecard: https://securityscorecards.dev/
 - OSV.dev API: https://google.github.io/osv.dev/api/
 - deps.dev API: https://docs.deps.dev/api/v3/
+- mooncakes.io（MoonBit レジストリ）: https://mooncakes.io/
