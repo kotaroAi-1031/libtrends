@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>libtrends 調査サマリ — 言語横断ライブラリ指標サイトの設計</title>
-<meta name="description" content="libtrends の調査フェーズ（API 19 件・既存実装 3 点・健全性指標・設計たたき台）の結論を 1 ページにまとめた資料。">
+<meta name="description" content="libtrends の調査フェーズ（対象 6 言語・API 16 件・料金・健全性指標・設計たたき台）の結論を 1 ページにまとめた資料。">
 <style>
   :root {
     color-scheme: light dark;
@@ -204,18 +204,19 @@
 <div class="wrap">
 
   <div class="hero">
-    <div class="eyebrow">Research Summary · 2026-11-19</div>
+    <div class="eyebrow">Research Summary · 2026-11-20</div>
     <h1>言語をまたいで、ライブラリの「使われ方」と「この先」を測る。</h1>
     <p class="lede">
-      libtrends は npm / PyPI / crates.io / RubyGems / Packagist / Maven / Go / NuGet を横断し、
-      ダウンロード数・スター・依存関係・保守性・脆弱性を集積するサイト。
-      本ページは調査資料 4 点（API 19 件、既存実装 3 点、健全性ツール 2 種、設計たたき台）の結論を要約したもの。
+      libtrends は Go / TypeScript / JavaScript / MoonBit / Rust / Python の 6 言語を対象に、
+      npm・PyPI・crates.io・Go module proxy・mooncakes.io を横断して、ダウンロード数・スター・
+      依存関係・保守性・脆弱性・料金を集積するサイト。
+      本ページは調査資料 4 点（対象 API 16 件、既存実装 3 点、健全性ツール 2 種、設計たたき台）の結論を要約したもの。
     </p>
     <div class="facts">
-      <div class="fact"><b>19</b><span>調査した API・データソース</span></div>
-      <div class="fact"><b>3</b><span>分析した既存実装</span></div>
+      <div class="fact"><b>16</b><span>対象 API・データソース</span></div>
+      <div class="fact"><b>6</b><span>対象言語（5 レジストリ）</span></div>
       <div class="fact"><b>27%</b><span>単一リクエストで欠落する履歴（実測）</span></div>
-      <div class="fact"><b>8</b><span>横断対象エコシステム</span></div>
+      <div class="fact"><b>3</b><span>分析した既存実装</span></div>
     </div>
   </div>
 
@@ -250,7 +251,7 @@
   <!-- 2. API -->
   <section id="api">
     <h2><span class="num">02</span>API 選定 — 三層モデル</h2>
-    <p class="sub">19 件を「一次ソース / 横断集約 / 付加指標」に分けた。ID は <code>01-apis.md</code> の API 一覧に対応する。</p>
+    <p class="sub">対象 6 言語に対応する 16 件を「一次ソース / 横断集約 / 付加指標」に分けた。ID は <code>01-apis.md</code> の API 一覧に対応する。</p>
 
     <figure class="diagram">
       <div class="mermaid" data-src="flowchart TB
@@ -260,11 +261,8 @@
       N2[&quot;npm registry&lt;br/&gt;API-002&quot;]
       N3[&quot;PyPI JSON&lt;br/&gt;API-009&quot;]
       N4[&quot;crates.io&lt;br/&gt;API-012&quot;]
-      N5[&quot;RubyGems&lt;br/&gt;API-013&quot;]
-      N6[&quot;Packagist&lt;br/&gt;API-014&quot;]
-      N7[&quot;Maven Central&lt;br/&gt;API-015&quot;]
       N8[&quot;Go proxy&lt;br/&gt;API-016&quot;]
-      N9[&quot;NuGet&lt;br/&gt;API-019&quot;]
+      N10[&quot;mooncakes.io&lt;br/&gt;API-020&quot;]
     end
     subgraph L2[&quot;横断集約&quot;]
       direction LR
@@ -297,51 +295,73 @@
     <div class="tablewrap">
       <table>
         <thead>
-          <tr><th class="mono">ID</th><th>API</th><th>主に取る指標</th><th>認証</th><th>レート制限</th></tr>
+          <tr><th class="mono">ID</th><th>API</th><th>主に取る指標</th><th>認証</th><th>レート制限</th><th>料金</th></tr>
         </thead>
         <tbody>
-          <tr><td class="mono">API-001</td><td>npm downloads</td><td>期間別ダウンロード数（一括 128 件・365 日）</td><td>不要</td><td>公式に明示なし</td></tr>
-          <tr><td class="mono">API-002</td><td>npm registry</td><td>バージョン・公開日時・依存・ライセンス</td><td>読み取り不要</td><td>公式に明示なし</td></tr>
-          <tr><td class="mono">API-003</td><td>libraries.io</td><td>依存関係・スター・コントリビュータ</td><td>要（api_key）</td><td>60 req/分</td></tr>
-          <tr><td class="mono">API-004</td><td>deps.dev v3</td><td>依存・被依存・要求制約・アドバイザリ</td><td>不要</td><td>公式に明示なし</td></tr>
-          <tr><td class="mono">API-005</td><td>ecosyste.ms packages</td><td>横断メタデータ・DL 数</td><td>不要（大規模は有償）</td><td>未認証は段階制限</td></tr>
-          <tr><td class="mono">API-006</td><td>ecosyste.ms repos</td><td>スター・最終コミット・Issue</td><td>不要（大規模は有償）</td><td>未認証は段階制限</td></tr>
-          <tr><td class="mono">API-007</td><td>GitHub REST</td><td>スター・Issue・リリース・Advisory</td><td>任意</td><td>60/時（未認証）・5,000/時</td></tr>
-          <tr><td class="mono">API-008</td><td>GitHub GraphQL</td><td>複数リポジトリの一括取得・依存グラフ</td><td>要</td><td>5,000 ポイント/時</td></tr>
-          <tr><td class="mono">API-009</td><td>PyPI JSON</td><td>メタデータ（DL 数なし）</td><td>不要</td><td>公式に明示なし</td></tr>
-          <tr><td class="mono">API-012</td><td>crates.io</td><td>メタデータ・累計/期間 DL</td><td>不要（UA 必須）</td><td>要確認</td></tr>
-          <tr><td class="mono">API-013</td><td>RubyGems</td><td>メタデータ・累計/版別 DL</td><td>不要</td><td>要確認</td></tr>
-          <tr><td class="mono">API-014</td><td>Packagist</td><td>メタデータ・DL・favers・スター</td><td>不要</td><td>要確認</td></tr>
-          <tr><td class="mono">API-015</td><td>Maven Central</td><td>メタデータ（DL 数なし）</td><td>不要</td><td>要確認</td></tr>
-          <tr><td class="mono">API-016</td><td>Go module proxy</td><td>バージョン一覧・info・mod・zip</td><td>不要</td><td>要確認</td></tr>
-          <tr><td class="mono">API-017</td><td>OpenSSF Scorecard</td><td>保守性・CI・レビュー等のスコア</td><td>不要</td><td>要確認</td></tr>
-          <tr><td class="mono">API-018</td><td>OSV.dev</td><td>既知脆弱性（バッチ可）</td><td>不要</td><td>制限なし（公式記載）</td></tr>
-          <tr><td class="mono">API-019</td><td>NuGet V3</td><td>メタデータ・累計 DL</td><td>読み取り不要</td><td>要確認</td></tr>
+          <tr><td class="mono">API-001</td><td>npm downloads（TS/JS）</td><td>期間別ダウンロード数（一括 128 件・365 日）</td><td>不要</td><td>公式に明示なし</td><td>無料</td></tr>
+          <tr><td class="mono">API-002</td><td>npm registry（TS/JS）</td><td>バージョン・公開日時・依存・ライセンス</td><td>読み取り不要</td><td>公式に明示なし</td><td>無料</td></tr>
+          <tr><td class="mono">API-003</td><td>libraries.io</td><td>依存関係・スター・コントリビュータ</td><td>要（api_key）</td><td>60 req/分</td><td>無料（登録要）</td></tr>
+          <tr><td class="mono">API-004</td><td>deps.dev v3</td><td>依存・被依存・要求制約（MoonBit 非対応）</td><td>不要</td><td>公式に明示なし</td><td>無料</td></tr>
+          <tr><td class="mono">API-005</td><td>ecosyste.ms packages</td><td>横断メタデータ・DL 数</td><td>不要（大規模は有償）</td><td>300 req/時（無料枠）</td><td>無料枠あり（200 USD/月〜）</td></tr>
+          <tr><td class="mono">API-006</td><td>ecosyste.ms repos</td><td>スター・最終コミット・Issue</td><td>不要（大規模は有償）</td><td>300 req/時（無料枠）</td><td>無料枠あり（200 USD/月〜）</td></tr>
+          <tr><td class="mono">API-007</td><td>GitHub REST</td><td>スター・Issue・リリース・Advisory</td><td>任意</td><td>60/時（未認証）・5,000/時</td><td>無料</td></tr>
+          <tr><td class="mono">API-008</td><td>GitHub GraphQL</td><td>複数リポジトリの一括取得</td><td>要</td><td>5,000 ポイント/時</td><td>無料</td></tr>
+          <tr><td class="mono">API-009</td><td>PyPI JSON（Python）</td><td>メタデータ（DL 数なし）</td><td>不要</td><td>公式に明示なし</td><td>無料</td></tr>
+          <tr><td class="mono">API-010</td><td>pypistats.org（Python）</td><td>DL の日次・週次・月次推移</td><td>不要</td><td>公式に明示なし</td><td>無料</td></tr>
+          <tr><td class="mono">API-011</td><td>PyPI BigQuery（Python）</td><td>生ログを SQL 集計（将来枠）</td><td>要（GCP）</td><td>クエリ課金</td><td>従量（1TiB/月まで無料）</td></tr>
+          <tr><td class="mono">API-012</td><td>crates.io（Rust）</td><td>メタデータ・累計/90日 DL</td><td>不要（UA 必須）</td><td>要確認</td><td>無料</td></tr>
+          <tr><td class="mono">API-016</td><td>Go module proxy</td><td>バージョン一覧・info・mod・zip（DL 数なし）</td><td>不要</td><td>要確認</td><td>無料</td></tr>
+          <tr><td class="mono">API-017</td><td>OpenSSF Scorecard</td><td>保守性・CI・レビュー等のスコア</td><td>不要</td><td>要確認</td><td>無料</td></tr>
+          <tr><td class="mono">API-018</td><td>OSV.dev</td><td>既知脆弱性（バッチ可）</td><td>不要</td><td>制限なし（公式記載）</td><td>無料</td></tr>
+          <tr><td class="mono">API-020</td><td>mooncakes.io（MoonBit）</td><td>累計 DL・被依存・全バージョン・ビルド状態</td><td>不要（未文書化 API）</td><td>要確認</td><td>無料（料金記載なし）</td></tr>
         </tbody>
       </table>
     </div>
-    <p style="font-size:12.5px;color:var(--text-muted)">※ API-010（pypistats・非公式）と API-011（PyPI BigQuery・GCP 認証と課金）は補完・将来枠のため表から省いた。全 19 件の詳細は <code>01-apis.md</code> を参照。</p>
+    <p style="font-size:12.5px;color:var(--text-muted)">※ 料金は「無料 / 無料枠あり / 従量課金」の区分。無料枠と価格の根拠は <code>01-apis.md</code> の「料金」節を参照。RubyGems・Packagist・Maven Central・NuGet は対象言語外のため除外した（同資料の「対象外としたもの」）。</p>
 
     <h3>推奨スタック</h3>
     <div class="tablewrap">
       <table>
         <thead><tr><th>役割</th><th>採用候補</th><th>理由</th></tr></thead>
         <tbody>
-          <tr><td>パッケージ同定・依存</td><td class="mono">API-004</td><td>認証不要で 6 システムを同一スキーマ。依存と被依存の両方</td></tr>
-          <tr><td>ダウンロード数の一次取得</td><td class="mono">API-001 / 012 / 013 / 014</td><td>期間別の推移を出せるのはレジストリ側のみ</td></tr>
-          <tr><td>PyPI のダウンロード</td><td class="mono">API-010 → 将来 API-011</td><td>公式 JSON に DL 数が無いため別経路が必要</td></tr>
+          <tr><td>パッケージ同定・依存</td><td class="mono">API-004</td><td>認証不要で npm / PyPI / Go / Cargo を同一スキーマ。MoonBit は非対応</td></tr>
+          <tr><td>MoonBit のメタデータ</td><td class="mono">API-020</td><td>deps.dev 非対応のため唯一の一次ソース。累計 DL と被依存を提供</td></tr>
+          <tr><td>ダウンロード数の一次取得</td><td class="mono">API-001 / 010 / 012 / 020</td><td>期間別の推移は npm と PyPI のみ。crates.io は累計と 90 日、MoonBit は累計のみ</td></tr>
+          <tr><td>PyPI の選択肢</td><td class="mono">API-010 → 将来 API-011</td><td>公式 JSON に DL 数が無いため別経路が必要</td></tr>
           <tr><td>リポジトリ指標</td><td class="mono">API-008（補助 API-006）</td><td>スター・最終コミット・Issue を一括取得</td></tr>
           <tr><td>保守性</td><td class="mono">API-017</td><td>項目別の内訳があり、根拠を画面に出せる</td></tr>
           <tr><td>脆弱性</td><td class="mono">API-018</td><td>レート制限なし・横断・バッチ対応</td></tr>
-          <tr><td>欠損補完・照合</td><td class="mono">API-003 / 005</td><td>キー必須・有償枠の制約があるため常用しない</td></tr>
+          <tr><td>欠損補完・照合</td><td class="mono">API-003 / 005</td><td>キー必須・無料枠 300 req/時（有償 200 USD/月〜）のため常用しない</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="note warn">
-      <b>注意:</b> レート制限が公式に明示されているのは API-003（60/分）、API-007（60/時・5,000/時）、
-      API-008（5,000 ポイント/時）、API-018（制限なし）だけ。それ以外は「不明（要確認）」であり、
-      実装前に実測して安全な間隔を決める必要がある。
+      <b>注意:</b> レート制限が公式に明示されているのは API-003（60/分）、API-005／API-006（無料枠 300/時）、
+      API-007（60/時・5,000/時）、API-008（5,000 ポイント/時）、API-018（制限なし）だけ。
+      それ以外は「不明（要確認）」であり、実装前に実測して安全な間隔を決める必要がある。
+    </div>
+
+    <h3>料金</h3>
+    <div class="grid2">
+      <div class="card" style="margin:0">
+        <h3 style="margin-top:0">無料で使えるもの（11 件）</h3>
+        <p style="font-size:14px;margin:0">
+          npm（API-001／002）、deps.dev（API-004）、GitHub（API-007／008）、PyPI JSON（API-009）、
+          pypistats（API-010）、crates.io（API-012）、Go proxy（API-016）、Scorecard（API-017）、
+          OSV（API-018）。いずれも公式に有償プランの記載がない。
+        </p>
+      </div>
+      <div class="card" style="margin:0">
+        <h3 style="margin-top:0">条件つき・従量課金（5 件）</h3>
+        <ul style="margin:0;padding-left:1.2em;font-size:14px">
+          <li><b>API-003 libraries.io</b> — 無料だがアカウント登録が必要（60 req/分）</li>
+          <li><b>API-005／006 ecosyste.ms</b> — 無料枠 300 req/時。Develop 200 USD/月（1,000/時）、
+              Scale 1,000 USD/月（5,000/時）</li>
+          <li><b>API-011 BigQuery</b> — 月 1 TiB まで無料、以降 6.25 USD/TiB</li>
+          <li><b>API-020 mooncakes.io</b> — 無料。ただし料金・API 仕様の公式記載がない</li>
+        </ul>
+      </div>
     </div>
   </section>
 
@@ -561,6 +581,16 @@ pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled
         </p>
       </div>
     </div>
+
+    <div class="note warn">
+      <b>MoonBit は uzomuzo で判定できない（実測）:</b>
+      <code>uzomuzo scan pkg:moonbit/moonbitlang/x@0.5.7</code> は
+      verdict <code>review</code> / lifecycle <code>Review Needed</code> /
+      <code>error: "package not found in deps.dev"</code> を返した。Scorecard も
+      moonbitlang のリポジトリを 404 で返す。MoonBit は最終リリース日・yanked・ビルド状態・
+      被依存（API-020）から代替指標を組み立て、uzomuzo 判定とは別枠で表示する。
+      <code>review</code> を「問題なし」と読み替えない。
+    </div>
   </section>
 
   <!-- 5. 設計 -->
@@ -608,7 +638,7 @@ pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled
       <div class="card" style="margin:0">
         <h3 style="margin-top:0">指標スキーマ（6 名前空間）</h3>
         <dl class="kv">
-          <dt>identity</dt><dd>purl / ecosystem / name / latest_version</dd>
+          <dt>identity</dt><dd>purl / ecosystem（npm・pypi・cargo・go・moonbit） / name / latest_version</dd>
           <dt>popularity</dt><dd>downloads / stars / dependents</dd>
           <dt>dependency</dt><dd>direct / transitive</dd>
           <dt>maintenance</dt><dd>lifecycle / eol / scores / reason</dd>
@@ -653,6 +683,7 @@ pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled
           <tr><td class="mono">fetch:github</td><td>日次</td><td>レート制限に当たったら翌日へ繰越</td></tr>
           <tr><td class="mono">scan:health</td><td>週次</td><td><code>unknown</code> を保存（ok にしない）</td></tr>
           <tr><td class="mono">fetch:osv</td><td>日次</td><td>前回の一覧を保持し、鮮度を表示</td></tr>
+          <tr><td class="mono">fetch:mooncakes</td><td>日次</td><td>累計 DL を差分で日次系列に変換</td></tr>
         </tbody>
       </table>
     </div>
@@ -667,7 +698,9 @@ pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled
         <li><b>スコア合成の是非と重み</b> — 軸別表示のままにするか、単一スコアを出すか。検証方法も未定。</li>
         <li><b>対象カタログの作り方</b> — 「人気上位 N 件」の N と選定基準。レジストリ間の偏り。</li>
         <li><b>PyPI のダウンロード指標</b> — 非公式 API-010 で始めるか、API-011（BigQuery）に投資するか。</li>
-        <li><b>DL 数を持たないエコシステム</b> — Maven（API-015）と Go（API-016）を被依存数だけで比較してよいか。</li>
+        <li><b>DL 数を持たないエコシステム</b> — Go（API-016）と MoonBit（累計のみ・API-020）を被依存数だけで比較してよいか。MoonBit の累計値から日次系列を作る方法も未定。</li>
+        <li><b>料金の上限管理</b> — ecosyste.ms の無料枠（300 req/時）と BigQuery の従量課金（1TiB/月まで無料）を、収集規模に対してどう抑えるか。</li>
+        <li><b>MoonBit の健全性</b> — uzomuzo が判定できず Scorecard も未収録。代替指標の重み付けと「判定なし」の見せ方。</li>
         <li><b>レート制限が不明な API の運用間隔</b> — 実測で決める必要がある。</li>
         <li><b>vuls の組み込み範囲</b> — 初期リリースに含めるか。実機検証も未実施。</li>
         <li><b>データ鮮度の表示仕様</b> — 取得失敗時に古い値をどう見せるか。</li>
@@ -691,16 +724,15 @@ pkg:pypi/django@2.2      verdict=caution   lifecycle=Stalled
       <a href="https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits-for-the-graphql-api">GitHub GraphQL rate limits</a> ·
       <a href="https://docs.pypi.org/api/json/">PyPI JSON API</a> ·
       <a href="https://crates.io/data-access">crates.io data access</a> ·
-      <a href="https://guides.rubygems.org/rubygems-org-api/">RubyGems API</a> ·
-      <a href="https://packagist.org/apidoc">Packagist</a> ·
-      <a href="https://central.sonatype.org/search/rest-api-guide/">Maven Central</a> ·
       <a href="https://go.dev/ref/mod#goproxy-protocol">Go module proxy</a> ·
       <a href="https://securityscorecards.dev/">OpenSSF Scorecard</a> ·
+      <a href="https://ecosyste.ms/pricing">ecosyste.ms 料金</a> ·
+      <a href="https://cloud.google.com/bigquery/pricing">BigQuery 料金</a> ·
       <a href="https://google.github.io/osv.dev/api/">OSV.dev</a> ·
-      <a href="https://learn.microsoft.com/nuget/api/overview">NuGet</a> ·
       <a href="https://tanstack.com/blog/npm-stats-the-right-way">TanStack: npm-stats-the-right-way</a> ·
       <a href="https://github.com/future-architect/uzomuzo-oss">uzomuzo</a> ·
-      <a href="https://vuls.io/">vuls</a>
+      <a href="https://vuls.io/">vuls</a> ·
+      <a href="https://mooncakes.io/">mooncakes.io</a>
     </div>
   </footer>
 </div>

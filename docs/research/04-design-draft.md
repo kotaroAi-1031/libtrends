@@ -12,8 +12,9 @@ libtrends は、言語とレジストリをまたいでライブラリの指標�
 
 ### 既存サービスとの違い
 
-- **言語横断**: npm 専用のトレンドサイトは複数あるが、npm / PyPI / crates.io / RubyGems /
-  Packagist / Maven / Go / NuGet を同じ画面で比較できるものは少ない（[02-existing-implementations.md](02-existing-implementations.md)）。
+- **言語横断**: npm 専用のトレンドサイトは複数あるが、Go / TypeScript / JavaScript / MoonBit /
+  Rust / Python を同じ画面で比較できるものは少ない（[02-existing-implementations.md](02-existing-implementations.md)）。
+  対象はこの 6 言語に限定し、レジストリは npm（TS/JS）、PyPI、crates.io、Go proxy、mooncakes.io の 5 つ。
 - **健全性を一級指標にする**: ダウンロード数だけのランキングは「人気だが EOL」を見落とす。
   uzomuzo / Scorecard / OSV の判定を指標として併記する（[03-health-signals.md](03-health-signals.md)）。
 - **根拠を出す**: スコアだけでなく、判定理由と参照 URL を保持する。
@@ -126,7 +127,7 @@ erDiagram
 | 名前空間 | フィールド | 型 | 欠損時の値 | 備考 |
 | --- | --- | --- | --- | --- |
 | `identity` | `purl` | string | なし（必須） | 全レジストリ共通の主キー |
-| `identity` | `ecosystem` | enum | なし（必須） | npm / pypi / cargo / rubygems / packagist / maven / go / nuget |
+| `identity` | `ecosystem` | enum | なし（必須） | npm（TS/JS） / pypi / cargo / go / moonbit |
 | `popularity` | `downloads.last_week` | integer | `null` | レジストリごとに定義が異なる（後述） |
 | `popularity` | `stars` | integer | `null` | GitHub のスター数。リポジトリ未特定なら `null` |
 | `popularity` | `dependents` | integer | `null` | 被依存パッケージ数 |
@@ -141,7 +142,7 @@ erDiagram
 ### 指標の意味づけに関する注意
 
 - **ダウンロード数の定義は揃わない**。npm は tarball 取得回数、PyPI はファイル取得回数、
-  Maven と Go はそもそも公開していない（[01-apis.md](01-apis.md) の API-015 / API-016）。
+  Go は公開しておらず、MoonBit（API-020）は累計値のみ（[01-apis.md](01-apis.md) の API-016 / API-020）。
   横並び比較では「同一の意味ではない」ことを明示する。
 - **0〜100 正規化は画面側で行う**。保存値は原単位のままにし、正規化係数を変えても
   過去データを再計算できるようにする（推測: 原単位保存の方が後から検証しやすい）。
@@ -154,7 +155,7 @@ erDiagram
 ```mermaid
 flowchart LR
     subgraph Sources["データソース"]
-        R1["レジストリ公式 API<br/>API-001/002/009/012/013/014/015/016/019"]
+        R1["レジストリ公式 API<br/>API-001/002/009/012/016/020"]
         R2["横断集約 API<br/>API-003/004/005/006"]
         R3["リポジトリ API<br/>API-007/008"]
         R4["セキュリティ API<br/>API-017/018"]
@@ -196,21 +197,18 @@ flowchart LR
 | API-002 | npm のパッケージメタデータ | 日次 | ペイロードが大きい |
 | API-003 | 依存関係の照合（補助） | 週次 | キー必須、60 req/分 |
 | API-004 | パッケージ同定・依存・被依存の基準 | 週次 | 上限が不明（要確認） |
-| API-005 | レジストリ横断メタデータの補完 | 週次 | 未認証は制限あり、大規模は有償 |
+| API-005 | レジストリ横断メタデータの補完 | 週次 | 無料枠 300 req/時、大規模は有償 |
 | API-006 | リポジトリ指標の補完 | 週次 | API-005 と同じ制限体系 |
 | API-007 | GitHub 個別取得（REST） | 随時 | 認証時 5,000 req/時 |
 | API-008 | GitHub 一括取得（GraphQL） | 日次 | 5,000 ポイント/時 |
 | API-009 | PyPI メタデータ | 日次 | ダウンロード数なし |
 | API-010 | PyPI ダウンロード推移 | 日次 | 非公式サービス |
-| API-011 | PyPI 生ログ集計（将来） | 随時 | GCP 認証・課金 |
+| API-011 | PyPI 生ログ集計（将来） | 随時 | GCP 認証・従量課金（1TiB/月まで無料） |
 | API-012 | crates.io メタデータ・DL | 日次 | User-Agent 必須 |
-| API-013 | RubyGems メタデータ・DL | 日次 | 上限不明（要確認） |
-| API-014 | Packagist メタデータ・DL | 日次 | p2 と packages で別エンドポイント |
-| API-015 | Maven メタデータ | 週次 | DL 数なし |
-| API-016 | Go バージョン一覧 | 週次 | DL 数なし |
-| API-017 | Scorecard スコア | 週次 | リポジトリ単位 |
+| API-016 | Go バージョン一覧 | 週次 | DL 数なし。`go.mod` は自前解析 |
+| API-017 | Scorecard スコア | 週次 | リポジトリ単位。MoonBit は未収録 |
 | API-018 | 既知脆弱性 | 日次 | レート制限なし、バッチ可 |
-| API-019 | NuGet メタデータ・DL | 日次 | 上限不明（要確認） |
+| API-020 | MoonBit メタデータ（mooncakes.io） | 日次 | 累計 DL のみ。未文書化 API |
 | local-uzomuzo | ライフサイクル・EOL 判定 | 週次 | 1 件あたり数秒 |
 | local-vuls | 利用環境の脆弱性観測 | 任意（利用者起点） | この VM には未導入 |
 
@@ -228,6 +226,8 @@ flowchart LR
 | `rollup:daily` | 全スナップショット | 日次 | 再実行可能（冪等） |
 
 - レート制限はソースごとにトークンバケットで管理し、429 を受けたら指数バックオフ。
+  無料枠が数値で決まっている API（API-005／API-006 は 300 req/時）を先に配分し、
+  残りを上限不明の API に回す。
 - 生レスポンスを保存する（`RAW`）ことで、正規化ロジックの変更時に再取得せず再処理できる。
 - スナップショットは日次パーティションで保持し、推移グラフは保存済みの系列から描く。
 
@@ -266,7 +266,7 @@ flowchart TD
 
 **比較**
 
-- 最大 5 件を同じ軸で並べる。単位の異なる指標（Maven / Go のダウンロード欠損）は
+- 最大 5 件を同じ軸で並べる。単位の異なる指標（Go・MoonBit のダウンロード欠損）は
   「データなし」と明示し、0 として描かない。
 - 健全性は数値とバッジの両方で表示する。
 
@@ -292,11 +292,14 @@ flowchart TD
   どう作るか（実データでの検証方法を含む）。
 - **対象カタログの作り方**: 「人気上位 N 件」の N と選定基準。レジストリごとに偏りが出る。
 - **PyPI のダウンロード指標**: API-010（非公式）で始めるか、最初から API-011（BigQuery）に投資するか。
-- **Maven / Go の人気度**: ダウンロード数が無いエコシステムで、被依存数だけで比較してよいか。
+- **Go / MoonBit の人気度**: ダウンロード数が無い（Go）・累計のみ（MoonBit）のエコシステムで、
+  被依存数だけで比較してよいか。
 - **vuls の組み込み範囲**: 利用環境の観測機能を初期リリースに含めるか、後回しにするか。
   この VM に vuls が無く、実出力での検証が済んでいない。
-- **レート制限が不明な API の運用**: API-004 / API-005 / API-012 / API-013 / API-014 / API-015 /
-  API-016 / API-019 は公式に数値が示されていない。実測で安全な間隔を決める必要がある。
+- **レート制限が不明な API の運用**: API-004 / API-009 / API-012 / API-016 / API-017 / API-020 は
+  公式に数値が示されていない。実測で安全な間隔を決める必要がある。
+- **料金の上限**: ecosyste.ms の無料枠（300 req/時）と API-011 の BigQuery 従量課金を、
+  収集規模に対してどう抑えるか（[01-apis.md](01-apis.md) の「料金」節）。
 - **データ更新の遅延表示**: 取得失敗時に「古い値」をどう見せるか（鮮度バッジの仕様）。
 - **ライセンス条件の確認**: ecosyste.ms の商用利用条件、libraries.io のキー発行条件。
 
@@ -311,12 +314,10 @@ flowchart TD
 - GitHub GraphQL レート制限: https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits-for-the-graphql-api
 - PyPI JSON API: https://docs.pypi.org/api/json/
 - crates.io データアクセス: https://crates.io/data-access
-- RubyGems.org API: https://guides.rubygems.org/rubygems-org-api/
-- Packagist API: https://packagist.org/apidoc
-- Maven Central Search API: https://central.sonatype.org/search/rest-api-guide/
 - Go module proxy: https://go.dev/ref/mod#goproxy-protocol
 - OpenSSF Scorecard: https://securityscorecards.dev/
 - OSV.dev API: https://google.github.io/osv.dev/api/
-- NuGet API: https://learn.microsoft.com/nuget/api/overview
+- mooncakes.io: https://mooncakes.io/
+- ecosyste.ms 料金: https://ecosyste.ms/pricing
 - uzomuzo: https://github.com/future-architect/uzomuzo-oss
 - vuls: https://vuls.io/
