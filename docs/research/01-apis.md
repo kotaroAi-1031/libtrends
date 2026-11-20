@@ -296,7 +296,7 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 対象 6 言語の外にあるため、次のレジストリ API は調査対象から外した。ID は欠番として残す
 （既存の参照を壊さないため、番号の振り直しはしない）。
 
-| ID | API | 対象外の理由 |
+| 旧 ID | API | 対象外の理由 |
 | --- | --- | --- |
 | API-013 | RubyGems.org API | Ruby は対象言語外 |
 | API-014 | Packagist API | PHP は対象言語外 |
