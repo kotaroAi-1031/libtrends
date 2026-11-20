@@ -15,7 +15,7 @@
 
 | 資料 | 内容 |
 | --- | --- |
-| [01-apis.md](01-apis.md) | ライブラリ集計 API 19 件の網羅調査。提供指標・認証・レート制限・出典と、選定方針 |
+| [01-apis.md](01-apis.md) | ライブラリ集計 API 16 件の網羅調査。提供指標・認証・レート制限・料金・出典と、選定方針（対象外 4 件の理由も記載） |
 | [02-existing-implementations.md](02-existing-implementations.md) | npm.bet / TanStack NPM Stats / npm-trend-clone の分析と比較。設計の工夫と弱点 |
 | [03-health-signals.md](03-health-signals.md) | uzomuzo（EOL・放棄検出）と vuls（脆弱性）を健全性指標に組み込む設計 |
 | [04-design-draft.md](04-design-draft.md) | libtrends の設計たたき台（指標スキーマ・収集アーキテクチャ・画面構成） |
