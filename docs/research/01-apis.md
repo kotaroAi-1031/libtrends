@@ -53,6 +53,7 @@ RubyGems（Ruby）、Packagist（PHP）、Maven Central（Java 系）、NuGet（
 | API-018 | OSV.dev API | 既知脆弱性（OSV 形式）。パッケージ・バージョン指定のクエリ、バッチクエリ、ID 直接取得 | 不要 | 明示的な上限なし（公式に "Currently there are no limits" と記載。レスポンスは HTTP/1.1 で 32MiB 上限） | 無料 | https://google.github.io/osv.dev/api/ |
 | API-020 | mooncakes.io registry API（MoonBit） | モジュール一覧、最新版・全バージョン（yanked 含む）、累計ダウンロード数、被依存モジュール一覧、ライセンス、リポジトリURL、キーワード、説明、ビルド状態、全体統計（総モジュール数・総ダウンロード数）。時系列のダウンロード推移と直接依存の一覧は提供しない | 読み取りは不要（API 自体が未文書化。公開には API トークン） | 不明（要確認。レスポンスに RateLimit 系ヘッダなし、公式ドキュメントなし） | 無料（公式に料金の記載なし） | https://mooncakes.io/ |
 | API-021 | OSS Insight Public API | GitHub リポジトリのスター推移、スター・Issue・PR 作成者の国・地域と所属組織、トレンドリポジトリ | 不要 | 600 リクエスト/時（IP 単位）、全体 1,000 リクエスト/分 | 無料 | https://ossinsight.io/docs/api |
+| API-022 | OSS Rebuild | パッケージのバージョン単位で、公開物がソースから再現可能にビルドできるかを Google が再ビルドして検証した結果（アーティファクト等価性の attestation） | 不要 | 不明（要確認） | 無料 | https://docs.oss-rebuild.dev/ |
 
 ## 個別の補足
 
@@ -238,6 +239,28 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
   正とする。公開される Parquet の集計テーブルは、スター推移の過去分を
   初期データとして取り込めるか、公開後に別途確認する。
 
+### API-022 OSS Rebuild
+
+- Google の OSS Rebuild が公開する、再現可能ビルドの検証結果。公開済みの
+  パッケージを Google が再ビルドし、公開物と一致するかを検証した
+  attestation（SLSA provenance 形式）を、公開バケット
+  `gs://google-rebuild-attestations` で提供する。パスは
+  `{ecosystem}/{package}/{version}/{artifact}/rebuild.intoto.jsonl` で、
+  認証なしで読み取りと一覧取得ができる（GCS の JSON API で実測）。
+  取得用の CLI（`oss-rebuild list` / `oss-rebuild get`）も公式に提供される。
+- 1 ファイルに 2 種の attestation が入る。再ビルドの手順を示す Rebuild と、
+  再ビルドした成果物と公開物のダイジェスト比較を示す ArtifactEquivalence で、
+  後者が「公開物がソースから再現できるか」の検証結果になる（express 4.17.1 で実測）。
+- 対象は npm / PyPI / crates.io の人気パッケージに限られ、バージョン単位でも
+  選択的である（実測: lodash は 4.17.20 / 4.17.23 にはあるが 4.17.21 には無い）。
+  Go と MoonBit は対象外。
+- **API-017／API-018 との役割の重なり**: いずれも付加指標の層だが、観点が異なる。
+  API-017（Scorecard）は開発プラクティス、API-018（OSV）は既知の脆弱性、
+  API-022 はビルドの完全性（公開物とソースの一致）をみる。
+- 判断: 採用する。attestation の有無と等価性の結果をビルド完全性の
+  シグナルとして使う。attestation が無いことは「対象外」を意味するだけで、
+  悪材料としては扱わない。
+
 ## 料金
 
 「API一覧」の料金列は、公開 API を利用するための料金を指す。区分は次のとおり。
@@ -288,7 +311,8 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 2. **横断集約**: API-004（deps.dev）、API-005／API-006（ecosyste.ms）、API-003（libraries.io）。
    共通スキーマで複数エコシステムを扱えるため、libtrends の土台に向く。ただし deps.dev は
    MoonBit 非対応で、更新頻度とカバレッジはレジストリ直取得に劣る。
-3. **付加指標**: API-007／API-008（GitHub）、API-017（Scorecard）、API-018（OSV）。
+3. **付加指標**: API-007／API-008（GitHub）、API-017（Scorecard）、API-018（OSV）、
+   API-022（OSS Rebuild）。
    人気度・保守性・脆弱性はレジストリからは取れないため、この層が実質的な差別化要素になる。
    API-021（OSS Insight）は GitHub リポジトリ指標という役割が API-007／API-008 と
    重なるが、スター推移とスター作成者の内訳は GitHub API では得られない。
@@ -375,3 +399,5 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 - mooncakes.io レジストリインデックス（name / version / checksum のみ）: https://github.com/moonbitlang/mooncakes.io-index
 - OSS Insight Public API: https://ossinsight.io/docs/api
 - OSS Insight 終了のお知らせ（2026-11-20）: https://ossinsight.io/blog/ossinsight-is-shutting-down
+- OSS Rebuild ドキュメント: https://docs.oss-rebuild.dev/
+- OSS Rebuild Attestation Storage: https://docs.oss-rebuild.dev/storage/
