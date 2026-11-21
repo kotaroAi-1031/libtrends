@@ -13,7 +13,7 @@ libtrends が扱う指標（ダウンロード数・スター数・人気度・�
 レジストリは 5 つになる。
 
 | 言語 | レジストリ | 担当 API | ダウンロード数の提供 |
-| --- | --- | --- | --- || --- 
+| --- | --- | --- | --- |
 | Go | proxy.golang.org | API-016 | なし |
 | TypeScript / JavaScript | registry.npmjs.org | API-001（統計）、API-002（メタデータ） | あり（日次〜任意期間） |
 | MoonBit | mooncakes.io | API-020 | 累計のみ（時系列なし） |
@@ -175,7 +175,7 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 仕様が予告なく変わる前提で扱う。
 
 | 端点 | 返すもの | 実測 |
-| --- | --- | --- || --- 
+| --- | --- | --- |
 | `GET /api/v0/modules` | 全モジュールの一覧（名前・最新版・ライセンス・リポジトリ・キーワード・説明・作成日時）。ダウンロード数は含まない | 200、3,875 件、約 1.4MB |
 | `GET /api/v0/modules?recent=N` | 最近更新されたモジュール（`{"recent":[...]}` 形式） | 200 |
 | `GET /api/v0/modules/statistics` | 全体統計 `{"total_modules":3875,"total_packages":34886,"total_lines":63849117,"total_downloads":12103826}` | 200 |
@@ -253,7 +253,7 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 ### 6 言語のカバレッジ
 
 | 指標 | TypeScript / JavaScript | Python | Rust | Go | MoonBit |
-| --- | --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- |
 | メタデータ | API-002 | API-009 | API-012 | API-016 | API-020 |
 | ダウンロード（期間別） | API-001 | API-010（または API-011） | API-012（累計・90日） | 提供なし | 提供なし（累計のみ） |
 | 被依存 | API-004 | API-004 | API-004 | API-004 | API-020 `dependents` |
@@ -265,7 +265,7 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 ### 推奨スタック（案）
 
 | 役割 | 採用候補 | 理由 |
-| --- | --- | --- || --- 
+| --- | --- | --- |
 | パッケージ同定・メタデータの基準 | API-004 deps.dev | 認証不要、npm / PyPI / Go / Cargo を同一スキーマで扱える。依存と被依存も取れる |
 | MoonBit のメタデータ | API-020 mooncakes.io | deps.dev が非対応のため唯一の一次ソース。仕様が未文書化な点に留意 |
 | ダウンロード数の一次取得 | API-001（npm）、API-010／API-011（PyPI）、API-012（crates.io）、API-020（MoonBit・累計のみ） | 期間別の推移を出せるのは npm と PyPI、crates.io は累計と直近90日 |
