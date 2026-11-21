@@ -17,7 +17,7 @@ npx @contextlint/cli@1.1.1
 
 ## 資料の構成契約
 
-調査資料は次の5ファイルを必須とする（STR-001 で存在を検証する）。
+調査資料は次の6ファイルを必須とする（STR-001 で存在を検証する）。
 
 | ファイル | 役割 |
 | --- | --- |
@@ -26,6 +26,7 @@ npx @contextlint/cli@1.1.1
 | `docs/research/02-existing-implementations.md` | 既存実装（repomix 3点）の分析と比較 |
 | `docs/research/03-health-signals.md` | uzomuzo / vuls を健全性指標に組み込む設計 |
 | `docs/research/04-design-draft.md` | libtrends の設計たたき台 |
+| `docs/research/05-icons.md` | アイコン取得元の調査と使い分け |
 
 各ファイルの必須セクションは SEC-001 でファイルごとに検証する。
 番号つき資料は末尾に「出典」セクションを持ち、事実には出典 URL を

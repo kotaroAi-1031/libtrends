@@ -52,6 +52,7 @@ RubyGems（Ruby）、Packagist（PHP）、Maven Central（Java 系）、NuGet（
 | API-017 | OpenSSF Scorecard API | リポジトリの健全性スコア（0〜10）とチェック項目別スコア（保守性、CI、コードレビュー、依存更新、脆弱性、ライセンス、署名など） | 不要 | 不明（要確認） | 無料 | https://securityscorecards.dev/ |
 | API-018 | OSV.dev API | 既知脆弱性（OSV 形式）。パッケージ・バージョン指定のクエリ、バッチクエリ、ID 直接取得 | 不要 | 明示的な上限なし（公式に "Currently there are no limits" と記載。レスポンスは HTTP/1.1 で 32MiB 上限） | 無料 | https://google.github.io/osv.dev/api/ |
 | API-020 | mooncakes.io registry API（MoonBit） | モジュール一覧、最新版・全バージョン（yanked 含む）、累計ダウンロード数、被依存モジュール一覧、ライセンス、リポジトリURL、キーワード、説明、ビルド状態、全体統計（総モジュール数・総ダウンロード数）。時系列のダウンロード推移と直接依存の一覧は提供しない | 読み取りは不要（API 自体が未文書化。公開には API トークン） | 不明（要確認。レスポンスに RateLimit 系ヘッダなし、公式ドキュメントなし） | 無料（公式に料金の記載なし） | https://mooncakes.io/ |
+| API-021 | OSS Insight Public API | GitHub リポジトリのスター推移、スター・Issue・PR 作成者の国・地域と所属組織、トレンドリポジトリ | 不要 | 600 リクエスト/時（IP 単位）、全体 1,000 リクエスト/分 | 無料 | https://ossinsight.io/docs/api |
 
 ## 個別の補足
 
@@ -197,6 +198,38 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
   （`moonbitlang/mooncakes.io-index`）で公開されている。ただし中身は
   `{"name","version","checksum"}` のみで、指標は含まない。
 
+### API-021 OSS Insight Public API
+
+- OSS Insight（PingCAP）の公開 API（ベータ）。ベース URL は
+  `https://api.ossinsight.io/v1` で、OpenAPI に従う。レスポンスは
+  `{"type":"sql_endpoint","data":{"columns":[...],"rows":[...]}}` という
+  SQL の実行結果の形で返る。認証は不要で、レート制限は IP 単位で
+  600 リクエスト/時、全体で 1,000 リクエスト/分（実測で
+  `x-ratelimit-limit: 600` のヘッダを確認）。
+- 主なエンドポイントは、トレンド
+  `GET /v1/trends/repos/?period={past_24_hours|past_week|past_month}&language={言語}` と、
+  リポジトリ単位の `GET /v1/repos/{owner}/{repo}/stargazers/countries`、
+  同 `stargazers/history`、同 `stargazers/organizations` で、Issue・PR の
+  作成者についても同じ形のエンドポイントがある。コレクションは
+  `GET /v1/collections/{id}/repos`。
+- この他に `https://api.ossinsight.io/gh/repos/{owner}/{repo}` があり、
+  GitHub API と同じ形のリポジトリ情報を 1 時間のキャッシュ付きで返す
+  （実測: 200）。
+- **API-007／API-008 との役割の重なり**: どちらも GitHub リポジトリの
+  指標を返す点で重なる。GitHub API が返すのは現在の総量（スター数など）
+  で、スターの推移や、スターを付けた人の国・地域・所属組織の内訳は
+  GitHub API からは実質取得できない（全 stargazer の列挙と利用者情報の
+  個別取得が必要になる）。OSS Insight の固有の価値はこの集計済みの
+  推移と内訳にある。
+- **実測での提供状況（2026-11-21）**: トレンドは 200 を返すが中身が
+  空で、API 自身が「GitHub 公開イベントの収集量が通常の約 0.3% まで
+  落ちたため、イベント由来のランキングは 2026-03-01 から提供できない」
+  という data_quality 情報を返した。stargazers 系は、ドキュメント記載の
+  公式例（pingcap/tidb）でも 500 エラーだった。上記の `/gh/` 経由は
+  正常に動作した。
+- 判断: 現時点では採用しない。スター推移の取得先として、復旧したら
+  付加指標の層に差し込む。現在の値の取得は API-007／API-008 を正とする。
+
 ## 料金
 
 「API一覧」の料金列は、公開 API を利用するための料金を指す。区分は次のとおり。
@@ -249,6 +282,10 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
    MoonBit 非対応で、更新頻度とカバレッジはレジストリ直取得に劣る。
 3. **付加指標**: API-007／API-008（GitHub）、API-017（Scorecard）、API-018（OSV）。
    人気度・保守性・脆弱性はレジストリからは取れないため、この層が実質的な差別化要素になる。
+   API-021（OSS Insight）は GitHub リポジトリ指標という役割が API-007／API-008 と
+   重なるが、スター推移とスター作成者の内訳は GitHub API では得られない。
+   ただし 2026-11-21 の実測では提供が劣化しており、現時点では採用しない
+   （詳細は「個別の補足」の API-021）。
 
 ### 6 言語のカバレッジ
 
@@ -328,3 +365,4 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 - mooncakes.io（MoonBit レジストリのポータル。API 仕様の記載はなし）: https://mooncakes.io/
 - mooncakes.io フロントエンドのリポジトリ: https://github.com/moonbitlang/mooncakes.io
 - mooncakes.io レジストリインデックス（name / version / checksum のみ）: https://github.com/moonbitlang/mooncakes.io-index
+- OSS Insight Public API: https://ossinsight.io/docs/api
