@@ -15,11 +15,12 @@
 
 | 資料 | 内容 |
 | --- | --- |
-| [01-apis.md](01-apis.md) | ライブラリ集計 API 16 件の網羅調査。提供指標・認証・レート制限・料金・出典と、選定方針（対象外 4 件の理由も記載） |
+| [01-apis.md](01-apis.md) | ライブラリ集計 API 17 件の網羅調査。提供指標・認証・レート制限・料金・出典と、選定方針（対象外 4 件の理由も記載） |
 | [02-existing-implementations.md](02-existing-implementations.md) | npm.bet / TanStack NPM Stats / npm-trend-clone の分析と比較。設計の工夫と弱点 |
 | [03-health-signals.md](03-health-signals.md) | uzomuzo（EOL・放棄検出）と vuls（脆弱性）を健全性指標に組み込む設計 |
 | [04-design-draft.md](04-design-draft.md) | libtrends の設計たたき台（指標スキーマ・収集アーキテクチャ・画面構成） |
-| [summary.html](summary.html) | 上記 4 資料の結論を 1 ページにまとめた HTML（図解・コード例つき） |
+| [05-icons.md](05-icons.md) | アイコン取得元の調査。GitHub のアバターと OG 画像、パッケージアイコンのフォールバック、Simple Icons / Devicon / Iconify の重なりと使い分け |
+| [summary.html](summary.html) | 01〜04 の結論を 1 ページにまとめた HTML（図解・コード例つき） |
 
 参考資料（`references/`、他リポジトリのコードを repomix で固めたもの）:
 
@@ -41,7 +42,8 @@
   npm / PyPI / Go / Cargo を同一スキーマで扱える（**MoonBit は非対応**）。API-005 / API-006
   （ecosyste.ms）と API-003（libraries.io）は欠損の補完・照合に限定する。
 - **付加指標**: API-008（GitHub GraphQL）でスター・最終コミット・Issue、API-017（Scorecard）で
-  保守性、API-018（OSV）で脆弱性。ここが差別化要素。
+  保守性、API-018（OSV）で脆弱性。ここが差別化要素。API-021（OSS Insight）はスター推移と
+  スター作成者の内訳が取れるが、2026-11-21 の実測では提供が劣化しており採用を見送った。
 
 レート制限が公式に明示されているのは API-003（60/分）、API-005／API-006（無料枠 300/時）、
 API-007（60/時・5,000/時）、API-008（5,000 ポイント/時）、API-018（制限なし）。他は実測で
@@ -100,6 +102,9 @@ API-007（60/時・5,000/時）、API-008（5,000 ポイント/時）、API-018�
 - **料金の上限管理**: ecosyste.ms の無料枠（300 req/時）と BigQuery の従量課金を、
   収集規模に対してどう抑えるか。無料枠を超える前提で予算を置くかも未定。
 - **vuls の組み込み範囲**: 利用環境の観測機能を初期リリースに含めるか。実機検証も未実施。
+- **OSS Insight（API-021）の復旧確認**: トレンドと stargazers 系が 2026-11-21 の実測で
+  提供劣化していた。スター推移の取得先として使うには、定期的に実測して復旧を
+  確認する必要がある。
 - **データ鮮度の表示仕様**: 取得失敗時に古い値をどう見せるか（鮮度バッジの設計）。
 - **利用条件の確認**: ecosyste.ms の商用利用条件、libraries.io のキー発行条件、
   crates.io のレート制限（自動取得では本文を取得できなかった）。
@@ -122,5 +127,8 @@ API-007（60/時・5,000/時）、API-008（5,000 ポイント/時）、API-018�
 - OSV.dev API: https://google.github.io/osv.dev/api/
 - uzomuzo: https://github.com/future-architect/uzomuzo-oss
 - mooncakes.io（MoonBit）: https://mooncakes.io/
+- OSS Insight Public API: https://ossinsight.io/docs/api
+- Simple Icons: https://simpleicons.org/
+- Devicon: https://devicon.dev/
 - vuls: https://vuls.io/
 - TanStack 設計ブログ: https://tanstack.com/blog/npm-stats-the-right-way
