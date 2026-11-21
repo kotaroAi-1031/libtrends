@@ -15,7 +15,7 @@
 
 | 資料 | 内容 |
 | --- | --- |
-| [01-apis.md](01-apis.md) | ライブラリ集計 API 17 件の網羅調査。提供指標・認証・レート制限・料金・出典と、選定方針（対象外 4 件の理由も記載） |
+| [01-apis.md](01-apis.md) | ライブラリ集計 API 18 件の網羅調査。提供指標・認証・レート制限・料金・出典と、選定方針（対象外 4 件の理由も記載） |
 | [02-existing-implementations.md](02-existing-implementations.md) | npm.bet / TanStack NPM Stats / npm-trend-clone の分析と比較。設計の工夫と弱点 |
 | [03-health-signals.md](03-health-signals.md) | uzomuzo（EOL・放棄検出）と vuls（脆弱性）を健全性指標に組み込む設計 |
 | [04-design-draft.md](04-design-draft.md) | libtrends の設計たたき台（指標スキーマ・収集アーキテクチャ・画面構成） |
@@ -42,7 +42,7 @@
   npm / PyPI / Go / Cargo を同一スキーマで扱える（**MoonBit は非対応**）。API-005 / API-006
   （ecosyste.ms）と API-003（libraries.io）は欠損の補完・照合に限定する。
 - **付加指標**: API-008（GitHub GraphQL）でスター・最終コミット・Issue、API-017（Scorecard）で
-  保守性、API-018（OSV）で脆弱性。ここが差別化要素。API-021（OSS Insight）はスター推移と
+  保守性、API-018（OSV）で脆弱性、API-022（OSS Rebuild）でビルド完全性。ここが差別化要素。API-021（OSS Insight）はスター推移と
   スター作成者の内訳が取れるが、2026-12-04 で提供終了が決まったため採用しない。
 
 レート制限が公式に明示されているのは API-003（60/分）、API-005／API-006（無料枠 300/時）、
@@ -129,6 +129,7 @@ API-007（60/時・5,000/時）、API-008（5,000 ポイント/時）、API-018�
 - mooncakes.io（MoonBit）: https://mooncakes.io/
 - OSS Insight Public API: https://ossinsight.io/docs/api
 - OSS Insight 終了のお知らせ（2026-11-20）: https://ossinsight.io/blog/ossinsight-is-shutting-down
+- OSS Rebuild ドキュメント: https://docs.oss-rebuild.dev/
 - Simple Icons: https://simpleicons.org/
 - Devicon: https://devicon.dev/
 - vuls: https://vuls.io/
