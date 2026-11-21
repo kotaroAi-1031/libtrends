@@ -227,8 +227,16 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
   という data_quality 情報を返した。stargazers 系は、ドキュメント記載の
   公式例（pingcap/tidb）でも 500 エラーだった。上記の `/gh/` 経由は
   正常に動作した。
-- 判断: 現時点では採用しない。スター推移の取得先として、復旧したら
-  付加指標の層に差し込む。現在の値の取得は API-007／API-008 を正とする。
+- **提供終了（2026-11-20 公式発表）**: ライブサービスは 2026-12-04 に
+  終了し、API は全リクエストに `410 Gone` を返すようになる。サイトは
+  読み取り専用のアーカイブとして残る。データセット（GitHub イベント
+  履歴・リポジトリメタデータ・集計テーブル）は Parquet 形式で
+  ダウンロード公開される予定。上記の提供劣化は、この終了に向けた
+  縮小だったとみられる。
+- 判断: 採用しない（提供終了のため）。スター推移は自前の日次
+  スナップショットで蓄積する。現在の値の取得は API-007／API-008 を
+  正とする。公開される Parquet の集計テーブルは、スター推移の過去分を
+  初期データとして取り込めるか、公開後に別途確認する。
 
 ## 料金
 
@@ -284,7 +292,7 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
    人気度・保守性・脆弱性はレジストリからは取れないため、この層が実質的な差別化要素になる。
    API-021（OSS Insight）は GitHub リポジトリ指標という役割が API-007／API-008 と
    重なるが、スター推移とスター作成者の内訳は GitHub API では得られない。
-   ただし 2026-11-21 の実測では提供が劣化しており、現時点では採用しない
+   ただし 2026-12-04 で提供終了が決まったため採用しない
    （詳細は「個別の補足」の API-021）。
 
 ### 6 言語のカバレッジ
@@ -366,3 +374,4 @@ MoonBit の公式パッケージレジストリは mooncakes.io。**公開 API �
 - mooncakes.io フロントエンドのリポジトリ: https://github.com/moonbitlang/mooncakes.io
 - mooncakes.io レジストリインデックス（name / version / checksum のみ）: https://github.com/moonbitlang/mooncakes.io-index
 - OSS Insight Public API: https://ossinsight.io/docs/api
+- OSS Insight 終了のお知らせ（2026-11-20）: https://ossinsight.io/blog/ossinsight-is-shutting-down
